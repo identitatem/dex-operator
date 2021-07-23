@@ -1,0 +1,18 @@
+domain: identitatem.io
+layout:
+- go.kubebuilder.io/v3
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
+projectName: dex-operator
+repo: github.com/cdoan1/dex-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: identitatem.io
+  kind: DexConfig
+  path: github.com/cdoan1/dex-operator/api/v1alpha1
+  version: v1alpha1
+version: "3"
