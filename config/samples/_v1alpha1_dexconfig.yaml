@@ -1,7 +1,6 @@
 apiVersion: identitatem.io/v1alpha1
 kind: DexConfig
 metadata:
-  name: dexconfig-sample
+  name: dex
 spec:
-  # Add fields here
-  foo: bar
+  size: 1
