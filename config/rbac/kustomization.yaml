@@ -5,7 +5,7 @@ resources:
 # runtime. Be sure to update RoleBinding and ClusterRoleBinding
 # subjects if changing service account names.
 - service_account.yaml
-- dex_service_account.yaml
+- dexsso_service_account.yaml
 - role.yaml
 - role_binding.yaml
 - leader_election_role.yaml
@@ -17,3 +17,5 @@ resources:
 - auth_proxy_role.yaml
 - auth_proxy_role_binding.yaml
 - auth_proxy_client_clusterrole.yaml
+- dexsso_cluster_role.yaml
+- dexsso_cluster_role_binding.yaml

@@ -207,6 +207,10 @@ func (r *DexConfigReconciler) deploymentForDexConfig(m *identitatemiov1alpha1.De
 			},
 		},
 	}
+
+	// TODO: for now, hardcode reference the SA created from CSV
+	dep.Spec.Template.Spec.ServiceAccountName = "dex-operator-dexsso"
+
 	dep.Spec.Template.Spec.Volumes = []corev1.Volume{{
 		Name: "static-files",
 		VolumeSource: corev1.VolumeSource{

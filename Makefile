@@ -208,7 +208,7 @@ sdk-run:
 	operator-sdk run bundle $(BUNDLE_IMG)
 
 cleanup:
-	operator-sdk cleanup dex-sso-operator
+	operator-sdk cleanup dex-operator
 
 wait:
 	sleep 20
