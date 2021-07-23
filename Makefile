@@ -36,7 +36,9 @@ IMAGE_TAG_BASE ?= identitatem.io/dex-operator
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+# IMG ?= controller:latest
+IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
 
@@ -198,3 +200,15 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+bits: build manifests docker-build docker-push bundle bundle-build bundle-push
+
+sdk-run:
+	@echo "Using VERSION: $(VERSION)"
+	operator-sdk run bundle $(BUNDLE_IMG)
+
+cleanup:
+	operator-sdk cleanup dex-sso-operator
+
+wait:
+	sleep 20

@@ -1,0 +1,50 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: dex-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: DexConfig is the Schema for the dexconfigs API
+      displayName: Dex Config
+      kind: DexConfig
+      name: dexconfigs.identitatem.io
+      version: v1alpha1
+  description: Dex Operator
+  displayName: Dex Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - dex
+  - idp
+  - sso
+  links:
+  - name: Dex Operator
+    url: https://dex-operator.domain
+  maintainers:
+  - email: cdoan@redhat.com
+    name: cdoan
+  maturity: alpha
+  provider:
+    name: cdoan@redhat.com
+    url: redhat.com
+  version: 0.0.0
