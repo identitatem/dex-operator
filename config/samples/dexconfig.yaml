@@ -1,0 +1,6 @@
+apiVersion: identitatem.io/v1alpha1
+kind: DexConfig
+metadata:
+  name: dex-community
+spec:
+  size: 1
