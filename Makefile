@@ -201,14 +201,4 @@ catalog-build: opm ## Build a catalog image.
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
 
-bits: build manifests docker-build docker-push bundle bundle-build bundle-push
-
-sdk-run:
-	@echo "Using VERSION: $(VERSION)"
-	operator-sdk run bundle $(BUNDLE_IMG)
-
-cleanup:
-	operator-sdk cleanup dex-operator
-
-wait:
-	sleep 20
+include Makefile2.mak

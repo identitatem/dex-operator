@@ -47,6 +47,7 @@ type DexConfigReconciler struct {
 //+kubebuilder:rbac:groups=identitatem.io,resources=dexconfigs/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -82,7 +83,8 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new deployment
 
-		dep := r.deploymentForDexConfig(dexconfig)
+		dep := r.deploymentCommunityForDexConfig(dexconfig)
+		// dep := r.deploymentForDexConfig(dexconfig)
 		// dep := r.reconcileDexDeployment(dexconfig)
 
 		log.Info("Creating a new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
@@ -96,6 +98,24 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{Requeue: true}, nil
 	} else if err != nil {
 		log.Error(err, "Failed to get Deployment")
+		return ctrl.Result{}, err
+	}
+
+	// Check if the service already exists, if not create a new one
+	foundserv := &corev1.Service{}
+	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, foundserv)
+	if err != nil && errors.IsNotFound(err) {
+		serv := r.serviceCommunityForDexConfig(dexconfig)
+		// serv := r.serviceForDexConfig(dexconfig)
+		log.Info("Creating a new Service", "Service.Namespace", serv.Namespace, "Service.Name", serv.Name)
+		err = r.Create(ctx, serv)
+		if err != nil {
+			log.Error(err, "Failed to create new Service", "Service.Namespace", serv.Namespace, "Service.Name", serv.Name)
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get Service")
 		return ctrl.Result{}, err
 	}
 
@@ -140,6 +160,46 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{}, nil
 }
 
+func (r *DexConfigReconciler) serviceForDexConfig(m *identitatemiov1alpha1.DexConfig) *corev1.Service {
+
+	ls := labelsForDexConfig(m.Name)
+	log.Info("labels:", ls)
+
+	labels := map[string]string{
+		"app": m.Name,
+	}
+	matchlabels := map[string]string{
+		"app": m.Name,
+	}
+
+	serv := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      m.Name,
+			Namespace: m.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeClusterIP,
+			Ports: []corev1.ServicePort{
+				{
+					Port:     5556,
+					Protocol: "TCP",
+					Name:     "http",
+				},
+				{
+					Port: 5557,
+					// TargetPort: ,
+					Protocol: "TCP",
+					Name:     "grpc",
+				},
+			},
+			Selector: matchlabels,
+		},
+	}
+	ctrl.SetControllerReference(m, serv, r.Scheme)
+	return serv
+}
+
 // deploymentForDexConfig returns a dexconfig Deployment object
 func (r *DexConfigReconciler) deploymentForDexConfig(m *identitatemiov1alpha1.DexConfig) *appsv1.Deployment {
 	ls := labelsForDexConfig(m.Name)
@@ -173,10 +233,10 @@ func (r *DexConfigReconciler) deploymentForDexConfig(m *identitatemiov1alpha1.De
 						// Env:             proxyEnvVars(),
 						Ports: []corev1.ContainerPort{
 							{
-								ContainerPort: 55556,
+								ContainerPort: 5556,
 								Name:          "http",
 							}, {
-								ContainerPort: 55557,
+								ContainerPort: 5557,
 								Name:          "grpc",
 							},
 						},
@@ -223,6 +283,145 @@ func (r *DexConfigReconciler) deploymentForDexConfig(m *identitatemiov1alpha1.De
 	return dep
 }
 
+// community deployment
+func (r *DexConfigReconciler) deploymentCommunityForDexConfig(m *identitatemiov1alpha1.DexConfig) *appsv1.Deployment {
+	ls := labelsForDexConfig2(m.Name, m.Namespace)
+	replicas := m.Spec.Size
+
+	dep := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      m.Name,
+			Namespace: m.Namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: ls,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: ls,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Command: []string{
+							"/usr/local/bin/dex",
+							"serve",
+							"/etc/dex/cfg/config.yaml",
+						},
+						Image:           "quay.io/dexidp/dex:v2.28.1",
+						ImagePullPolicy: corev1.PullAlways,
+						Name:            m.Name,
+						Env: []corev1.EnvVar{
+							{
+								// FIX: failed to initialize storage: failed to inspect service account token:
+								//      jwt claim "kubernetes.io/serviceaccount/namespace" not found
+								Name:  "KUBERNETES_POD_NAMESPACE",
+								Value: m.Namespace,
+							},
+						},
+						Ports: []corev1.ContainerPort{
+							{
+								ContainerPort: 5556,
+								Name:          "https",
+							}, {
+								ContainerPort: 5557,
+								Name:          "grpc",
+							},
+						},
+						Resources: getDexResources(m),
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      "config",
+								MountPath: "/etc/dex/cfg",
+							},
+							{
+								Name:      "tls",
+								MountPath: "/etc/dex/tls",
+							},
+						},
+					}},
+					Volumes: []corev1.Volume{
+						{
+							Name: "config",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "dex-community",
+									},
+									Items: []corev1.KeyToPath{
+										{
+											Key:  "config.yaml",
+											Path: "config.yaml",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "tls",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: "dex-community.tls",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// dep.Spec.Template.Spec.ServiceAccountName = "dex-community"
+	dep.Spec.Template.Spec.ServiceAccountName = "dex-operator-dexsso"
+	// TODO: move to this
+	// dep.Spec.Template.Spec.ServiceAccountName = m.Name
+
+	ctrl.SetControllerReference(m, dep, r.Scheme)
+	return dep
+}
+
+// community service
+// * expect the TLS CERT and KEY to be manually created
+// * expect the dex.tls secret to reference those CERT|KEY
+// * the ROUTE is hardcoded for now dex-community.apps.${BASE_DOMAIN}
+//
+func (r *DexConfigReconciler) serviceCommunityForDexConfig(m *identitatemiov1alpha1.DexConfig) *corev1.Service {
+	ls := labelsForDexConfig2(m.Name, m.Namespace)
+	log.Info("labels:", ls)
+	labels := map[string]string{
+		"app": m.Name,
+	}
+	matchlabels := map[string]string{
+		"app": m.Name,
+	}
+	serv := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      m.Name,
+			Namespace: m.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeNodePort,
+			Ports: []corev1.ServicePort{
+				{
+					Port:     5556,
+					Protocol: "TCP",
+					Name:     "http",
+				},
+				{
+					Port:     5557,
+					Protocol: "TCP",
+					Name:     "grpc",
+				},
+			},
+			Selector: matchlabels,
+		},
+	}
+	ctrl.SetControllerReference(m, serv, r.Scheme)
+	return serv
+}
+
 // getDexResources will return the ResourceRequirements for the Dex container.
 func getDexResources(cr *identitatemiov1alpha1.DexConfig) corev1.ResourceRequirements {
 	resources := corev1.ResourceRequirements{}
@@ -232,7 +431,11 @@ func getDexResources(cr *identitatemiov1alpha1.DexConfig) corev1.ResourceRequire
 // labelsForDexConfig returns the labels for selecting the resources
 // belonging to the given dexconfig CR name.
 func labelsForDexConfig(name string) map[string]string {
-	return map[string]string{"app": "dexconfig", "dexconfig_cr": name}
+	return map[string]string{"app": "dex-community", "dexconfig_name": name}
+}
+
+func labelsForDexConfig2(name string, namespace string) map[string]string {
+	return map[string]string{"app": name, "dexconfig_name": name, "dexconfig_namespace": namespace}
 }
 
 // getPodNames returns the pod names of the array of pods passed in
