@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"fmt"
 	"time"
 
 	"context"
@@ -446,9 +447,18 @@ func (r *DexConfigReconciler) serviceCommunityForDexConfig(m *identitatemiov1alp
 	return serv
 }
 
+// https://stackoverflow.com/questions/47104454/openshift-online-v3-adding-new-route-gives-forbidden-error
 func (r *DexConfigReconciler) routeCommunityForDexConfig(m *identitatemiov1alpha1.DexConfig) *routev1.Route {
 	ls := labelsForDexConfig2(m.Name, m.Namespace)
-	log.Info("I'm inside function ...\n")
+	bd := ""
+
+	if m.Spec.BaseDomain != "" {
+		bd = m.Spec.BaseDomain
+	} else {
+		bd = "dell-r730-008.demo.red-chesterfield.com"
+	}
+	routeHost := fmt.Sprintf("%s.apps.%s", m.Name, bd)
+
 	routeSpec := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.Name,
@@ -456,13 +466,13 @@ func (r *DexConfigReconciler) routeCommunityForDexConfig(m *identitatemiov1alpha
 			Labels:    ls,
 		},
 		Spec: routev1.RouteSpec{
-			Host: "dex-community.apps.dell-r730-008.demo.red-chesterfield.com",
+			Host: routeHost,
 			TLS: &routev1.TLSConfig{
 				Termination: routev1.TLSTerminationPassthrough,
 			},
 			To: routev1.RouteTargetReference{
 				Kind: "Service",
-				Name: "dex-community",
+				Name: m.Name,
 			},
 			Port: &routev1.RoutePort{
 				TargetPort: intstr.IntOrString{
