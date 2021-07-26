@@ -19,13 +19,16 @@ package controllers
 import (
 	"time"
 
+	"context"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"context"
+	routev1 "github.com/openshift/api/route/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -48,6 +51,8 @@ type DexConfigReconciler struct {
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=route.openshift.io,resources=routes/custom-host,verbs=create;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -116,6 +121,25 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{Requeue: true}, nil
 	} else if err != nil {
 		log.Error(err, "Failed to get Service")
+		return ctrl.Result{}, err
+	}
+
+	// Check if the service already exists, if not create a new one
+	log.Info("I'm here ...\n")
+	foundroute := &routev1.Route{}
+	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, foundroute)
+	if err != nil && errors.IsNotFound(err) {
+		log.Info("I'm here next ...\n")
+		routeSpec := r.routeCommunityForDexConfig(dexconfig)
+		// log.Info("Creating a new Route", "Route.Namespace", routeSpec.Namespace, "Route.Name", routeSpec.Name)
+		err = r.Create(ctx, routeSpec)
+		if err != nil {
+			// log.Error(err, "Failed to create new Route", "Route.Namespace", routeSpec.Namespace, "Route.Name", routeSpec.Name)
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get Route\n")
 		return ctrl.Result{}, err
 	}
 
@@ -420,6 +444,37 @@ func (r *DexConfigReconciler) serviceCommunityForDexConfig(m *identitatemiov1alp
 	}
 	ctrl.SetControllerReference(m, serv, r.Scheme)
 	return serv
+}
+
+func (r *DexConfigReconciler) routeCommunityForDexConfig(m *identitatemiov1alpha1.DexConfig) *routev1.Route {
+	ls := labelsForDexConfig2(m.Name, m.Namespace)
+	log.Info("I'm inside function ...\n")
+	routeSpec := &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      m.Name,
+			Namespace: m.Namespace,
+			Labels:    ls,
+		},
+		Spec: routev1.RouteSpec{
+			Host: "dex-community.apps.dell-r730-008.demo.red-chesterfield.com",
+			TLS: &routev1.TLSConfig{
+				Termination: routev1.TLSTerminationPassthrough,
+			},
+			To: routev1.RouteTargetReference{
+				Kind: "Service",
+				Name: "dex-community",
+			},
+			Port: &routev1.RoutePort{
+				TargetPort: intstr.IntOrString{
+					Type:   intstr.String,
+					StrVal: "http",
+				},
+			},
+			WildcardPolicy: routev1.WildcardPolicyNone,
+		},
+	}
+	ctrl.SetControllerReference(m, routeSpec, r.Scheme)
+	return routeSpec
 }
 
 // getDexResources will return the ResourceRequirements for the Dex container.
