@@ -17,9 +17,8 @@ sample:
 check:
 	@echo ""
 	@echo "Verify openid configuration"
-	@curl -k https://dex-community.apps.dell-r730-008.demo.red-chesterfield.com/.well-known/openid-configuration
-	@echo ""
-	@curl -k -I https://dex-community.apps.dell-r730-008.demo.red-chesterfield.com/.well-known/openid-configuration
+	@curl -k https://$(shell oc get route dex-community -ojsonpath='{.spec.host}')/.well-known/openid-configuration
+	@curl -k -I https://$(shell oc get route dex-community -ojsonpath='{.spec.host}')/.well-known/openid-configuration
 
 .PHONY: cleanup
 cleanup:

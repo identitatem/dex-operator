@@ -372,6 +372,9 @@ func (r *DexConfigReconciler) deploymentCommunityForDexConfig(m *identitatemiov1
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
+										// Right now, since we're manually creating this config,
+										// this is hard coded.
+										// can change this to dex configmap in this namespace: dex-community
 										Name: "dex-community",
 									},
 									Items: []corev1.KeyToPath{
@@ -387,6 +390,7 @@ func (r *DexConfigReconciler) deploymentCommunityForDexConfig(m *identitatemiov1
 							Name: "tls",
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
+									// Can change this to dex.tls in this namespace: dex-community
 									SecretName: "dex-community.tls",
 								},
 							},
@@ -397,10 +401,10 @@ func (r *DexConfigReconciler) deploymentCommunityForDexConfig(m *identitatemiov1
 		},
 	}
 
-	// dep.Spec.Template.Spec.ServiceAccountName = "dex-community"
+	// Right now, we're using the the dex-operator service account name
+	// TODO: dex instance itself needs its own service account
+	//   dep.Spec.Template.Spec.ServiceAccountName = m.Name
 	dep.Spec.Template.Spec.ServiceAccountName = "dex-operator-dexsso"
-	// TODO: move to this
-	// dep.Spec.Template.Spec.ServiceAccountName = m.Name
 
 	ctrl.SetControllerReference(m, dep, r.Scheme)
 	return dep
