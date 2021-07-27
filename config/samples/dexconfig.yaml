@@ -4,3 +4,4 @@ metadata:
   name: dex-community
 spec:
   size: 1
+  basedomain: dell-r730-008.demo.red-chesterfield.com

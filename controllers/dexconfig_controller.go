@@ -455,7 +455,9 @@ func (r *DexConfigReconciler) routeCommunityForDexConfig(m *identitatemiov1alpha
 	if m.Spec.BaseDomain != "" {
 		bd = m.Spec.BaseDomain
 	} else {
-		bd = "dell-r730-008.demo.red-chesterfield.com"
+		// TODO: need to add logic to automatically get the basedomain of the cluster
+		log.Error("BaseDomain required to be set for now ...")
+		return nil
 	}
 	routeHost := fmt.Sprintf("%s.apps.%s", m.Name, bd)
 
