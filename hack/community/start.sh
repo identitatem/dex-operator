@@ -5,7 +5,9 @@ export GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-foobar}
 export BASE_DOMAIN=$(oc cluster-info | grep api | sed 's/.*api.//g' | cut -d':' -f1)
 export DEX_ROUTE=dex.apps.${BASE_DOMAIN}
 
-oc new-project dex-community
+current_project=$(oc project -q)
+# oc new-project dex-community
+oc new-project $current_project || echo "project already exists ..."
 
 if [ ! -d ssl ]; then
 

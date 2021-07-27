@@ -506,7 +506,12 @@ func labelsForDexConfig(name string) map[string]string {
 }
 
 func labelsForDexConfig2(name string, namespace string) map[string]string {
-	return map[string]string{"app": name, "dexconfig_name": name, "dexconfig_namespace": namespace}
+	return map[string]string{
+		"app":                 name,
+		"dexconfig_name":      name,
+		"dexconfig_namespace": namespace,
+		"owner":               "dex-operator", // oc get routes -l owner=dex-operator
+	}
 }
 
 // getPodNames returns the pod names of the array of pods passed in
