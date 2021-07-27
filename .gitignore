@@ -25,3 +25,4 @@ testbin/*
 *~
 
 hack/argocd*.yaml
+hack/community/ssl

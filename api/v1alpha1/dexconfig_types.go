@@ -29,9 +29,9 @@ type DexConfigSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Size defines the number of Memcached instances
-	Size int32 `json:"size,omitempty"`
-	// Foo is an example field of DexConfig. Edit dexconfig_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Size       int32  `json:"size,omitempty"`
+	Foo        string `json:"foo,omitempty"`
+	BaseDomain string `json:"basedomain,omitempty"`
 }
 
 // DexConfigStatus defines the observed state of DexConfig
