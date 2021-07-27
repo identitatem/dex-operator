@@ -3,7 +3,6 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: dex-community
-  namespace: dex-community
 data:
   config.yaml: |
     issuer: https://dex-community.apps.dell-r730-008.demo.red-chesterfield.com
