@@ -13,6 +13,14 @@ sample:
 	@echo "Creating a DexConfig instance ..."
 	oc apply -f ./config/samples/dexconfig.yaml
 
+
+.PHONY: sample-gitops
+sample-gitops:
+	@echo ""
+	@echo "Creating a DexConfig instance for gitops ..."
+	oc apply -f ./config/samples/dexconfig-gitops.yaml
+
+
 .PHONY: check
 check:
 	@echo ""

@@ -88,9 +88,13 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new deployment
+		var dep *appsv1.Deployment
 
-		dep := r.deploymentCommunityForDexConfig(dexconfig)
-		// dep := r.deploymentForDexConfig(dexconfig)
+		if dexconfig.Spec.Type == "community" {
+			dep = r.deploymentCommunityForDexConfig(dexconfig)
+		} else {
+			dep = r.deploymentForDexConfig(dexconfig)
+		}
 		// dep := r.reconcileDexDeployment(dexconfig)
 
 		log.Info("Creating a new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
@@ -111,8 +115,12 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	foundserv := &corev1.Service{}
 	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, foundserv)
 	if err != nil && errors.IsNotFound(err) {
-		serv := r.serviceCommunityForDexConfig(dexconfig)
-		// serv := r.serviceForDexConfig(dexconfig)
+		var serv *corev1.Service
+		if dexconfig.Spec.Type == "community" {
+			serv = r.serviceCommunityForDexConfig(dexconfig)
+		} else {
+			serv = r.serviceForDexConfig(dexconfig)
+		}
 		log.Info("Creating a new Service", "Service.Namespace", serv.Namespace, "Service.Name", serv.Name)
 		err = r.Create(ctx, serv)
 		if err != nil {
@@ -125,17 +133,16 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
+	// if dexconfig.Spec.Type == "community" {
 	// Check if the service already exists, if not create a new one
-	log.Info("I'm here ...\n")
 	foundroute := &routev1.Route{}
 	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, foundroute)
 	if err != nil && errors.IsNotFound(err) {
-		log.Info("I'm here next ...\n")
 		routeSpec := r.routeCommunityForDexConfig(dexconfig)
-		// log.Info("Creating a new Route", "Route.Namespace", routeSpec.Namespace, "Route.Name", routeSpec.Name)
+		log.Info("Creating a new Route", "Route.Namespace", routeSpec.Namespace, "Route.Name", routeSpec.Name)
 		err = r.Create(ctx, routeSpec)
 		if err != nil {
-			// log.Error(err, "Failed to create new Route", "Route.Namespace", routeSpec.Namespace, "Route.Name", routeSpec.Name)
+			log.Error(err, "Failed to create new Route", "Route.Namespace", routeSpec.Namespace, "Route.Name", routeSpec.Name)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
@@ -143,6 +150,7 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		log.Error(err, "Failed to get Route\n")
 		return ctrl.Result{}, err
 	}
+	// }
 
 	// Ensure the deployment size is the same as the spec
 	size := dexconfig.Spec.Size
@@ -187,9 +195,7 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 func (r *DexConfigReconciler) serviceForDexConfig(m *identitatemiov1alpha1.DexConfig) *corev1.Service {
 
-	ls := labelsForDexConfig(m.Name)
-	log.Info("labels:", ls)
-
+	// ls := labelsForDexConfig(m.Name)
 	labels := map[string]string{
 		"app": m.Name,
 	}
@@ -212,8 +218,7 @@ func (r *DexConfigReconciler) serviceForDexConfig(m *identitatemiov1alpha1.DexCo
 					Name:     "http",
 				},
 				{
-					Port: 5557,
-					// TargetPort: ,
+					Port:     5557,
 					Protocol: "TCP",
 					Name:     "grpc",
 				},
@@ -453,9 +458,7 @@ func (r *DexConfigReconciler) serviceCommunityForDexConfig(m *identitatemiov1alp
 
 // https://stackoverflow.com/questions/47104454/openshift-online-v3-adding-new-route-gives-forbidden-error
 func (r *DexConfigReconciler) routeCommunityForDexConfig(m *identitatemiov1alpha1.DexConfig) *routev1.Route {
-	ls := labelsForDexConfig2(m.Name, m.Namespace)
-	bd := ""
-
+	var bd string
 	if m.Spec.BaseDomain != "" {
 		bd = m.Spec.BaseDomain
 	} else {
@@ -463,8 +466,8 @@ func (r *DexConfigReconciler) routeCommunityForDexConfig(m *identitatemiov1alpha
 		log.Error("BaseDomain required to be set for now ...")
 		return nil
 	}
+	ls := labelsForDexConfig2(m.Name, m.Namespace)
 	routeHost := fmt.Sprintf("%s.apps.%s", m.Name, bd)
-
 	routeSpec := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.Name,
@@ -489,6 +492,10 @@ func (r *DexConfigReconciler) routeCommunityForDexConfig(m *identitatemiov1alpha
 			WildcardPolicy: routev1.WildcardPolicyNone,
 		},
 	}
+	// override Termination if gitops
+	if m.Spec.Type != "community" {
+		routeSpec.Spec.TLS.Termination = routev1.TLSTerminationEdge
+	}
 	ctrl.SetControllerReference(m, routeSpec, r.Scheme)
 	return routeSpec
 }
@@ -502,7 +509,10 @@ func getDexResources(cr *identitatemiov1alpha1.DexConfig) corev1.ResourceRequire
 // labelsForDexConfig returns the labels for selecting the resources
 // belonging to the given dexconfig CR name.
 func labelsForDexConfig(name string) map[string]string {
-	return map[string]string{"app": "dex-community", "dexconfig_name": name}
+	return map[string]string{
+		"app":            name,
+		"dexconfig_name": name,
+	}
 }
 
 func labelsForDexConfig2(name string, namespace string) map[string]string {

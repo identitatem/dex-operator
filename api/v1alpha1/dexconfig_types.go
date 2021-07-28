@@ -28,10 +28,11 @@ type DexConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Size defines the number of Memcached instances
 	Size       int32  `json:"size,omitempty"`
 	Foo        string `json:"foo,omitempty"`
 	BaseDomain string `json:"basedomain,omitempty"`
+	Type       string `json:"type,omitempty"` // Type: community | argocd - a development option to control which flavor of dex we deploy.
+	// The gitops version has some minor constraints.
 }
 
 // DexConfigStatus defines the observed state of DexConfig

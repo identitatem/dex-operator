@@ -1,8 +1,8 @@
 apiVersion: identitatem.io/v1alpha1
 kind: DexConfig
 metadata:
-  name: dex-community
+  name: dex-gitops
 spec:
   size: 1
   basedomain: dell-r730-008.demo.red-chesterfield.com
-  type: community
+  type: gitops

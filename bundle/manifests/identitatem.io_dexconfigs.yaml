@@ -39,9 +39,10 @@ spec:
               foo:
                 type: string
               size:
-                description: Size defines the number of Memcached instances
                 format: int32
                 type: integer
+              type:
+                type: string
             type: object
           status:
             description: DexConfigStatus defines the observed state of DexConfig
