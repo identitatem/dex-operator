@@ -26,3 +26,4 @@ testbin/*
 
 hack/argocd*.yaml
 hack/community/ssl
+hack/gitops/ssl
