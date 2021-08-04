@@ -8,8 +8,9 @@ You'll need operator-sdk 1.9.0+.
 
 ```
 git clone https://github.com/identitatem/dex-operator.git
+cd dex-operator
+
 oc new-project dex-operator
-```
 
 # To use prebuilt image. Otherwise, you can reset these variables and build your own.
 export IMAGE_TAG_BASE=quay.io/cdoan/dex-operator
