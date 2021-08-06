@@ -23,6 +23,7 @@ testbin/*
 *.swp
 *.swo
 *~
+.history
 
 hack/argocd*.yaml
 hack/community/ssl

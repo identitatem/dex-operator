@@ -52,6 +52,7 @@ type DexConfigReconciler struct {
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes/custom-host,verbs=create;patch
 
@@ -83,6 +84,67 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
+	log.Info(">>>>>>>>>>>>>>>>>>>>>>>")
+
+	foundconfigmap := &corev1.ConfigMap{}
+	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, foundconfigmap)
+	if err != nil && errors.IsNotFound(err) {
+		cmSpec := r.configmapForDexConfig(dexconfig)
+		log.Info("Creating a new ConfigMap", "ConfigMap.Namespace", cmSpec.Namespace, "ConfigMap.Name", cmSpec.Name)
+		err = r.Create(ctx, cmSpec)
+		if err != nil {
+			log.Error(err, "Failed to create ConfigMap", "ConfigMap.Namespace", cmSpec.Namespace, "ConfigMap.Name", cmSpec.Name)
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get ConfigMap")
+		return ctrl.Result{}, err
+	}
+
+	// Check if the service already exists, if not create a new one
+	foundserv := &corev1.Service{}
+	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, foundserv)
+	if err != nil && errors.IsNotFound(err) {
+		var serv *corev1.Service
+		if dexconfig.Spec.Type == "community" {
+			serv = r.serviceCommunityForDexConfig(dexconfig)
+		} else {
+			serv = r.serviceForDexConfig(dexconfig)
+		}
+		log.Info("Creating a new Service", "Service.Namespace", serv.Namespace, "Service.Name", serv.Name)
+		err = r.Create(ctx, serv)
+		if err != nil {
+			log.Error(err, "Failed to create new Service", "Service.Namespace", serv.Namespace, "Service.Name", serv.Name)
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	} else if errors.IsAlreadyExists(err) {
+		log.Error(err, "Resource already exists...")
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get Service")
+		return ctrl.Result{}, err
+	}
+
+	// if dexconfig.Spec.Type == "community" {
+	// Check if the service already exists, if not create a new one
+	foundroute := &routev1.Route{}
+	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, foundroute)
+	if err != nil && errors.IsNotFound(err) {
+		routeSpec := r.routeCommunityForDexConfig(dexconfig)
+		log.Info("Creating a new Route", "Route.Namespace", routeSpec.Namespace, "Route.Name", routeSpec.Name)
+		err = r.Create(ctx, routeSpec)
+		if err != nil {
+			log.Error(err, "Failed to create new Route", "Route.Namespace", routeSpec.Namespace, "Route.Name", routeSpec.Name)
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get Route\n")
+		return ctrl.Result{}, err
+	}
+	// }
 	// Check if the deployment already exists, if not create a new one
 	found := &appsv1.Deployment{}
 	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, found)
@@ -110,47 +172,6 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		log.Error(err, "Failed to get Deployment")
 		return ctrl.Result{}, err
 	}
-
-	// Check if the service already exists, if not create a new one
-	foundserv := &corev1.Service{}
-	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, foundserv)
-	if err != nil && errors.IsNotFound(err) {
-		var serv *corev1.Service
-		if dexconfig.Spec.Type == "community" {
-			serv = r.serviceCommunityForDexConfig(dexconfig)
-		} else {
-			serv = r.serviceForDexConfig(dexconfig)
-		}
-		log.Info("Creating a new Service", "Service.Namespace", serv.Namespace, "Service.Name", serv.Name)
-		err = r.Create(ctx, serv)
-		if err != nil {
-			log.Error(err, "Failed to create new Service", "Service.Namespace", serv.Namespace, "Service.Name", serv.Name)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{Requeue: true}, nil
-	} else if err != nil {
-		log.Error(err, "Failed to get Service")
-		return ctrl.Result{}, err
-	}
-
-	// if dexconfig.Spec.Type == "community" {
-	// Check if the service already exists, if not create a new one
-	foundroute := &routev1.Route{}
-	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, foundroute)
-	if err != nil && errors.IsNotFound(err) {
-		routeSpec := r.routeCommunityForDexConfig(dexconfig)
-		log.Info("Creating a new Route", "Route.Namespace", routeSpec.Namespace, "Route.Name", routeSpec.Name)
-		err = r.Create(ctx, routeSpec)
-		if err != nil {
-			log.Error(err, "Failed to create new Route", "Route.Namespace", routeSpec.Namespace, "Route.Name", routeSpec.Name)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{Requeue: true}, nil
-	} else if err != nil {
-		log.Error(err, "Failed to get Route\n")
-		return ctrl.Result{}, err
-	}
-	// }
 
 	// Ensure the deployment size is the same as the spec
 	size := dexconfig.Spec.Size
@@ -191,6 +212,80 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// }
 
 	return ctrl.Result{}, nil
+}
+
+// Manager needs to own the dex configmap and thus the dex config.yaml file that is loaded by dex.
+// Updating the configmap reloads dex.
+//
+// When DexConfig is created, create a specific configmap that will hold the dex configuration
+func (r *DexConfigReconciler) configmapForDexConfig(m *identitatemiov1alpha1.DexConfig) *corev1.ConfigMap {
+
+	log.Info("entering configmap for dexconfig...")
+
+	// var configMapData = make(map[string]string)
+	// configMapData["config.yaml"] = dexconfigdata
+
+	labels := map[string]string{
+		"app": m.Name,
+	}
+
+	var clientID, clientSecret string
+
+	if m.Spec.Connectors[0].Config.ClientID != "" {
+		clientID = m.Spec.Connectors[0].Config.ClientID
+	} else {
+		clientID = "test-data-clientid"
+	}
+	if m.Spec.Connectors[0].Config.ClientSecret != "" {
+		clientSecret = m.Spec.Connectors[0].Config.ClientSecret
+	} else {
+		clientSecret = "test-data-clientsecret"
+	}
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      m.Name,
+			Namespace: m.Namespace,
+			Labels:    labels,
+		},
+		Data: map[string]string{"config.yaml": `
+issuer: https://` + m.Name + `.apps.` + m.Spec.BaseDomain + `
+storage:
+  type: kubernetes
+  config:
+    inCluster: true
+web:
+  https: 0.0.0.0:5556
+  tlsCert: /etc/dex/tls/tls.crt
+  tlsKey: /etc/dex/tls/tls.key
+grpc:
+  addr: 0.0.0.0:5557
+  tlsCert: /etc/dex/tls/tls.crt
+  tlsKey: /etc/dex/tls/tls.key
+  reflection: true
+connectors:
+- type: github
+  id: github
+  name: GitHub
+  config:
+    clientID: ` + clientID + `
+    clientSecret: ` + clientSecret + `
+    redirectURI: https://` + m.Name + `.apps.` + m.Spec.BaseDomain + `
+    org: kubernetes
+oauth2:
+  skipApprovalScreen: true
+staticClients:
+- id: example-app
+  redirectURIs:
+  - 'http://127.0.0.1:5555/callback'
+  name: 'Example App'
+  secret: another-client-secret
+enablePasswordDB: true
+`},
+	}
+
+	log.Info("defined configmap for dexconfig...")
+	ctrl.SetControllerReference(m, cm, r.Scheme)
+	return cm
 }
 
 func (r *DexConfigReconciler) serviceForDexConfig(m *identitatemiov1alpha1.DexConfig) *corev1.Service {
@@ -362,7 +457,7 @@ func (r *DexConfigReconciler) deploymentCommunityForDexConfig(m *identitatemiov1
 						Resources: getDexResources(m),
 						VolumeMounts: []corev1.VolumeMount{
 							{
-								Name:      "config",
+								Name:      "config", // dex config.yaml
 								MountPath: "/etc/dex/cfg",
 							},
 							{
@@ -377,10 +472,7 @@ func (r *DexConfigReconciler) deploymentCommunityForDexConfig(m *identitatemiov1
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										// Right now, since we're manually creating this config,
-										// this is hard coded.
-										// can change this to dex configmap in this namespace: dex-community
-										Name: "dex-community",
+										Name: m.Name,
 									},
 									Items: []corev1.KeyToPath{
 										{
@@ -395,8 +487,9 @@ func (r *DexConfigReconciler) deploymentCommunityForDexConfig(m *identitatemiov1
 							Name: "tls",
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									// Can change this to dex.tls in this namespace: dex-community
-									SecretName: "dex-community.tls",
+									// this secret is generated using service serving certificate via service annotation
+									// service.beta.openshift.io/serving-cert-secret-name: m.Name-tls-secret
+									SecretName: fmt.Sprintf(m.Name + "-tls-secret"),
 								},
 							},
 						},
@@ -415,11 +508,6 @@ func (r *DexConfigReconciler) deploymentCommunityForDexConfig(m *identitatemiov1
 	return dep
 }
 
-// community service
-// * expect the TLS CERT and KEY to be manually created
-// * expect the dex.tls secret to reference those CERT|KEY
-// * the ROUTE is hardcoded for now dex-community.apps.${BASE_DOMAIN}
-//
 func (r *DexConfigReconciler) serviceCommunityForDexConfig(m *identitatemiov1alpha1.DexConfig) *corev1.Service {
 	ls := labelsForDexConfig2(m.Name, m.Namespace)
 	log.Info("labels:", ls)
@@ -434,6 +522,9 @@ func (r *DexConfigReconciler) serviceCommunityForDexConfig(m *identitatemiov1alp
 			Name:      m.Name,
 			Namespace: m.Namespace,
 			Labels:    labels,
+			Annotations: map[string]string{
+				"service.beta.openshift.io/serving-cert-secret-name": fmt.Sprintf(m.Name + "-tls-secret"),
+			},
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeNodePort,

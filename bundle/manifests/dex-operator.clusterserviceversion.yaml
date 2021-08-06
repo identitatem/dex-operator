@@ -18,7 +18,7 @@ metadata:
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.9.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: dex-operator.v0.0.1
+  name: dex-operator.v0.0.12
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -42,6 +42,18 @@ spec:
           - apps
           resources:
           - deployments
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
           verbs:
           - create
           - delete
@@ -159,7 +171,7 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: quay.io/cdoan/dex-operator:0.0.1
+                image: quay.io/cdoan/dex-operator:0.0.12
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -175,11 +187,11 @@ spec:
                   periodSeconds: 10
                 resources:
                   limits:
-                    cpu: 100m
-                    memory: 30Mi
+                    cpu: 300m
+                    memory: 400Mi
                   requests:
-                    cpu: 100m
-                    memory: 20Mi
+                    cpu: 300m
+                    memory: 200Mi
                 securityContext:
                   allowPrivilegeEscalation: false
               securityContext:
@@ -244,4 +256,4 @@ spec:
   provider:
     name: cdoan@redhat.com
     url: redhat.com
-  version: 0.0.1
+  version: 0.0.12

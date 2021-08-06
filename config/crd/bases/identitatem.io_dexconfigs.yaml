@@ -38,6 +38,28 @@ spec:
             properties:
               basedomain:
                 type: string
+              connectors:
+                items:
+                  properties:
+                    config:
+                      properties:
+                        clientid:
+                          type: string
+                        clientsecret:
+                          type: string
+                        org:
+                          type: string
+                        redirecturi:
+                          type: string
+                      type: object
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
               foo:
                 type: string
               size:

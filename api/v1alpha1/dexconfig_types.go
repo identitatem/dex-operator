@@ -23,15 +23,30 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type ConfigSpec struct {
+	ClientID     string `json:"clientid,omitempty"`
+	ClientSecret string `json:"clientsecret,omitempty"`
+	RedirectURI  string `json:"redirecturi,omitempty"`
+	Org          string `json:"org,omitempty"`
+}
+
+type ConnectorSpec struct {
+	Name   string     `json:"name,omitempty"`
+	Type   string     `json:"type,omitempty"`
+	Id     string     `json:"id,omitempty"`
+	Config ConfigSpec `json:"config,omitempty"`
+}
+
 // DexConfigSpec defines the desired state of DexConfig
 type DexConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Size       int32  `json:"size,omitempty"`
-	Foo        string `json:"foo,omitempty"`
-	BaseDomain string `json:"basedomain,omitempty"`
-	Type       string `json:"type,omitempty"` // Type: community | argocd - a development option to control which flavor of dex we deploy.
+	Size       int32           `json:"size,omitempty"`
+	Foo        string          `json:"foo,omitempty"`
+	BaseDomain string          `json:"basedomain,omitempty"`
+	Type       string          `json:"type,omitempty"` // Type: community | argocd - a development option to control which flavor of dex we deploy.
+	Connectors []ConnectorSpec `json:"connectors,omitempty"`
 	// The gitops version has some minor constraints.
 }
 
