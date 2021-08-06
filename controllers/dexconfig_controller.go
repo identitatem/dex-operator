@@ -36,7 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	identitatemiov1alpha1 "github.com/cdoan1/dex-operator/api/v1alpha1"
+	identitatemiov1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
 	"github.com/prometheus/common/log"
 )
 
