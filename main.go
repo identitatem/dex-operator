@@ -33,8 +33,8 @@ import (
 
 	routev1 "github.com/openshift/api/route/v1"
 
-	identitatemiov1alpha1 "github.com/cdoan1/dex-operator/api/v1alpha1"
-	"github.com/cdoan1/dex-operator/controllers"
+	identitatemiov1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
+	"github.com/identitatem/dex-operator/controllers"
 	//+kubebuilder:scaffold:imports
 )
 

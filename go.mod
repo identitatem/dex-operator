@@ -1,4 +1,4 @@
-module github.com/cdoan1/dex-operator
+module github.com/identitatem/dex-operator
 
 go 1.16
 

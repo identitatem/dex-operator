@@ -30,7 +30,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	identitatemiov1alpha1 "github.com/cdoan1/dex-operator/api/v1alpha1"
+	identitatemiov1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 
