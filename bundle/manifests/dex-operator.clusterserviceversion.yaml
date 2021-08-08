@@ -8,17 +8,30 @@ metadata:
           "apiVersion": "identitatem.io/v1alpha1",
           "kind": "DexConfig",
           "metadata": {
-            "name": "dex-server"
+            "name": "dex"
           },
           "spec": {
-            "size": 1
+            "basedomain": "pool-sno-8x32-kgcmg.demo.red-chesterfield.com",
+            "connectors": [
+              {
+                "config": {
+                  "clientid": "testing-123",
+                  "clientsecret": "testing-123-clientsecret"
+                },
+                "id": "github",
+                "name": "github",
+                "type": "github"
+              }
+            ],
+            "size": 1,
+            "type": "community"
           }
         }
       ]
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.9.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: dex-operator.v0.0.12
+  name: dex-operator.v0.0.2
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -73,6 +86,18 @@ spec:
         - apiGroups:
           - ""
           resources:
+          - serviceaccounts
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
           - services
           verbs:
           - create
@@ -108,6 +133,30 @@ spec:
           - get
           - patch
           - update
+        - apiGroups:
+          - rbac
+          resources:
+          - clusterrole
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - rbac
+          resources:
+          - clusterrolebinding
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
         - apiGroups:
           - route.openshift.io
           resources:
@@ -171,7 +220,8 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: quay.io/cdoan/dex-operator:0.0.12
+                image: quay.io/cdoan/dex-operator:0.0.2
+                imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -256,4 +306,4 @@ spec:
   provider:
     name: cdoan@redhat.com
     url: redhat.com
-  version: 0.0.12
+  version: 0.0.2

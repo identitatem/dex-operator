@@ -24,6 +24,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -53,6 +54,9 @@ type DexConfigReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rbac,resources=clusterrole,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rbac,resources=clusterrolebinding,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes/custom-host,verbs=create;patch
 
@@ -170,6 +174,75 @@ func (r *DexConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{Requeue: true}, nil
 	} else if err != nil {
 		log.Error(err, "Failed to get Deployment")
+		return ctrl.Result{}, err
+	}
+
+	foundServiceAccount := &corev1.ServiceAccount{}
+	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, foundServiceAccount)
+	if err != nil && errors.IsNotFound(err) {
+		serviceAccountSpec := r.newServiceAccount(dexconfig)
+		log.Info("Creating a new Service Account",
+			"ServiceAccount.Namespace", serviceAccountSpec.Namespace,
+			"ServiceAccount.Name", serviceAccountSpec.Name)
+		err = r.Create(ctx, serviceAccountSpec)
+		if err != nil {
+			log.Error(err, "Failed to create ServiceAccount",
+				"ServiceAccount.Namespace", serviceAccountSpec.Namespace,
+				"ServiceAccount.Name", serviceAccountSpec.Name)
+			return ctrl.Result{}, err
+		}
+		// any other error
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil && errors.IsAlreadyExists(err) {
+		log.Error(err, ">>>>>>>> Resource already exists...")
+		return ctrl.Result{RequeueAfter: time.Second}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get ServiceAccount")
+		return ctrl.Result{}, err
+	}
+
+	foundCR := &rbacv1.ClusterRole{}
+	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, foundCR)
+	if err != nil && errors.IsNotFound(err) {
+		clusterRoleSpec := r.newClusterRole(dexconfig)
+		log.Info("Creating ClusterRole", "ClusterRole.Name", clusterRoleSpec.Name)
+		err = r.Create(ctx, clusterRoleSpec)
+		if err != nil {
+			log.Error(err, "Failed to create ClusterRole",
+				"ClusterRole.Name", clusterRoleSpec.Name)
+			return ctrl.Result{}, err
+		}
+		// any other error
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil && errors.IsAlreadyExists(err) {
+		log.Error(err, ">>>>>>>> Resource already exists...")
+		return ctrl.Result{RequeueAfter: time.Second}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get ClusterRole")
+		return ctrl.Result{}, err
+	}
+
+	foundCRB := &rbacv1.ClusterRoleBinding{}
+	err = r.Get(ctx, types.NamespacedName{Name: dexconfig.Name, Namespace: dexconfig.Namespace}, foundCRB)
+	if err != nil && errors.IsNotFound(err) {
+		clusterRoleBindingSpec := r.newClusterRoleBinding(dexconfig)
+
+		log.Info("Creating ClusterRoleBinding",
+			"ClusterRoleBinding.Name", clusterRoleBindingSpec.Name)
+
+		err = r.Create(ctx, clusterRoleBindingSpec)
+		if err != nil {
+			log.Error(err, "Failed to create ClusterRole",
+				"ClusterRoleBinding.Name", clusterRoleBindingSpec.Name)
+			return ctrl.Result{}, err
+		} else if errors.IsAlreadyExists(err) {
+			log.Error(err, "Resource already exists...")
+			return ctrl.Result{}, nil
+		}
+		// any other error
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get ClusterRoleBinding")
 		return ctrl.Result{}, err
 	}
 
@@ -589,6 +662,84 @@ func (r *DexConfigReconciler) routeCommunityForDexConfig(m *identitatemiov1alpha
 	}
 	ctrl.SetControllerReference(m, routeSpec, r.Scheme)
 	return routeSpec
+}
+
+func (r *DexConfigReconciler) newClusterRole(m *identitatemiov1alpha1.DexConfig) *rbacv1.ClusterRole {
+
+	clusterRoleSpec := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "dex-operator-dexsso",
+			// Labels: map[string]string{
+			// 	"owner": "owner-label",
+			// },
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				Resources: []string{
+					"*",
+				},
+				Verbs: []string{
+					"*",
+				},
+				APIGroups: []string{
+					"dex.coreos.com",
+				},
+			},
+			{
+				Resources: []string{
+					"customresourcedefinitions",
+				},
+				Verbs: []string{
+					"create",
+				},
+				APIGroups: []string{
+					"apiextensions.k8s.io",
+				},
+			},
+		},
+	}
+	ctrl.SetControllerReference(m, clusterRoleSpec, r.Scheme)
+	return clusterRoleSpec
+}
+
+func (r *DexConfigReconciler) newClusterRoleBinding(m *identitatemiov1alpha1.DexConfig) *rbacv1.ClusterRoleBinding {
+	clusterRoleBindingSpec := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "dex-operator-dexsso",
+			// Labels: map[string]string{
+			// 	ownerLabelKey: ownerLabelValue,
+			// },
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "ClusterRole",
+			Name:     "dex-operator-dexsso",
+			APIGroup: "rbac.authorization.k8s.io",
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      m.Name,
+				Namespace: m.Namespace,
+			},
+		},
+	}
+	ctrl.SetControllerReference(m, clusterRoleBindingSpec, r.Scheme)
+	return clusterRoleBindingSpec
+}
+
+func (r *DexConfigReconciler) newServiceAccount(m *identitatemiov1alpha1.DexConfig) *corev1.ServiceAccount {
+	labels := map[string]string{
+		"app": m.Name,
+	}
+	serviceAccountSpec := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "dex-operator-dexsso",
+			Namespace: m.Namespace,
+			Labels:    labels,
+		},
+	}
+	ctrl.SetControllerReference(m, serviceAccountSpec, r.Scheme)
+	return serviceAccountSpec
 }
 
 // getDexResources will return the ResourceRequirements for the Dex container.

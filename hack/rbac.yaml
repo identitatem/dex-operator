@@ -1,4 +1,3 @@
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -22,4 +21,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: dex-operator-dexsso
-  namespace: dex-community
+  namespace: dex
