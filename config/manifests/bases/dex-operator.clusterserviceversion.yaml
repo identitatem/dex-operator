@@ -10,13 +10,18 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: DexConfig is the Schema for the dexconfigs API
-      displayName: Dex Config
-      kind: DexConfig
-      name: dexconfigs.identitatem.io
+    - description: DexClient is the Schema for the dexclients API
+      displayName: Dex Client
+      kind: DexClient
+      name: dexclients.auth.identitatem.io
       version: v1alpha1
-  description: Dex Operator
-  displayName: Dex Operator
+    - description: DexServer is the Schema for the dexservers API
+      displayName: Dex Server
+      kind: DexServer
+      name: dexservers.auth.identitatem.io
+      version: v1alpha1
+  description: dex operator
+  displayName: dex-operator
   icon:
   - base64data: ""
     mediatype: ""
@@ -35,8 +40,7 @@ spec:
     type: AllNamespaces
   keywords:
   - dex
-  - idp
-  - sso
+  - operator
   links:
   - name: Dex Operator
     url: https://dex-operator.domain
@@ -45,6 +49,6 @@ spec:
     name: cdoan
   maturity: alpha
   provider:
-    name: cdoan@redhat.com
+    name: redhat.com
     url: redhat.com
   version: 0.0.0

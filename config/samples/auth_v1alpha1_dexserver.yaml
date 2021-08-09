@@ -1,0 +1,7 @@
+apiVersion: auth.identitatem.io/v1alpha1
+kind: DexServer
+metadata:
+  name: dexserver-sample
+spec:
+  # Add fields here
+  foo: bar

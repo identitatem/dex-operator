@@ -31,9 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	routev1 "github.com/openshift/api/route/v1"
-
-	identitatemiov1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
+	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
 	"github.com/identitatem/dex-operator/controllers"
 	//+kubebuilder:scaffold:imports
 )
@@ -46,8 +44,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(identitatemiov1alpha1.AddToScheme(scheme))
-	utilruntime.Must(routev1.AddToScheme(scheme))
+	utilruntime.Must(authv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -74,18 +71,25 @@ func main() {
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "d4e1e7e1.identitatem.io",
+		LeaderElectionID:       "09c5986b.identitatem.io",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	if err = (&controllers.DexConfigReconciler{
+	if err = (&controllers.DexServerReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "DexConfig")
+		setupLog.Error(err, "unable to create controller", "controller", "DexServer")
+		os.Exit(1)
+	}
+	if err = (&controllers.DexClientReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "DexClient")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

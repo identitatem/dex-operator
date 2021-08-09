@@ -23,20 +23,17 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// DexConfigSpec defines the desired state of DexConfig
-type DexConfigSpec struct {
+// DexServerSpec defines the desired state of DexServer
+type DexServerSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Size       int32  `json:"size,omitempty"`
-	Foo        string `json:"foo,omitempty"`
-	BaseDomain string `json:"basedomain,omitempty"`
-	Type       string `json:"type,omitempty"` // Type: community | argocd - a development option to control which flavor of dex we deploy.
-	// The gitops version has some minor constraints.
+	// Foo is an example field of DexServer. Edit dexserver_types.go to remove/update
+	Foo string `json:"foo,omitempty"`
 }
 
-// DexConfigStatus defines the observed state of DexConfig
-type DexConfigStatus struct {
+// DexServerStatus defines the observed state of DexServer
+type DexServerStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
@@ -44,24 +41,24 @@ type DexConfigStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// DexConfig is the Schema for the dexconfigs API
-type DexConfig struct {
+// DexServer is the Schema for the dexservers API
+type DexServer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   DexConfigSpec   `json:"spec,omitempty"`
-	Status DexConfigStatus `json:"status,omitempty"`
+	Spec   DexServerSpec   `json:"spec,omitempty"`
+	Status DexServerStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// DexConfigList contains a list of DexConfig
-type DexConfigList struct {
+// DexServerList contains a list of DexServer
+type DexServerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []DexConfig `json:"items"`
+	Items           []DexServer `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&DexConfig{}, &DexConfigList{})
+	SchemeBuilder.Register(&DexServer{}, &DexServerList{})
 }

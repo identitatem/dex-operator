@@ -5,32 +5,47 @@ metadata:
     alm-examples: |-
       [
         {
-          "apiVersion": "identitatem.io/v1alpha1",
-          "kind": "DexConfig",
+          "apiVersion": "auth.identitatem.io/v1alpha1",
+          "kind": "DexClient",
           "metadata": {
-            "name": "dex-server"
+            "name": "dexclient-sample"
           },
           "spec": {
-            "size": 1
+            "foo": "bar"
+          }
+        },
+        {
+          "apiVersion": "auth.identitatem.io/v1alpha1",
+          "kind": "DexServer",
+          "metadata": {
+            "name": "dexserver-sample"
+          },
+          "spec": {
+            "foo": "bar"
           }
         }
       ]
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.9.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: dex-operator.v0.0.1
+  name: dex-operator.v0.0.2
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: DexConfig is the Schema for the dexconfigs API
-      displayName: Dex Config
-      kind: DexConfig
-      name: dexconfigs.identitatem.io
+    - description: DexClient is the Schema for the dexclients API
+      displayName: Dex Client
+      kind: DexClient
+      name: dexclients.auth.identitatem.io
       version: v1alpha1
-  description: Dex Operator
-  displayName: Dex Operator
+    - description: DexServer is the Schema for the dexservers API
+      displayName: Dex Server
+      kind: DexServer
+      name: dexservers.auth.identitatem.io
+      version: v1alpha1
+  description: dex operator
+  displayName: dex-operator
   icon:
   - base64data: ""
     mediatype: ""
@@ -39,9 +54,9 @@ spec:
       clusterPermissions:
       - rules:
         - apiGroups:
-          - apps
+          - auth.identitatem.io
           resources:
-          - deployments
+          - dexclients
           verbs:
           - create
           - delete
@@ -51,17 +66,23 @@ spec:
           - update
           - watch
         - apiGroups:
-          - ""
+          - auth.identitatem.io
           resources:
-          - pods
+          - dexclients/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - auth.identitatem.io
+          resources:
+          - dexclients/status
           verbs:
           - get
-          - list
-          - watch
+          - patch
+          - update
         - apiGroups:
-          - ""
+          - auth.identitatem.io
           resources:
-          - services
+          - dexservers
           verbs:
           - create
           - delete
@@ -71,50 +92,19 @@ spec:
           - update
           - watch
         - apiGroups:
-          - identitatem.io
+          - auth.identitatem.io
           resources:
-          - dexconfigs
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - identitatem.io
-          resources:
-          - dexconfigs/finalizers
+          - dexservers/finalizers
           verbs:
           - update
         - apiGroups:
-          - identitatem.io
+          - auth.identitatem.io
           resources:
-          - dexconfigs/status
+          - dexservers/status
           verbs:
           - get
           - patch
           - update
-        - apiGroups:
-          - route.openshift.io
-          resources:
-          - routes
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - route.openshift.io
-          resources:
-          - routes/custom-host
-          verbs:
-          - create
-          - patch
         - apiGroups:
           - authentication.k8s.io
           resources:
@@ -159,7 +149,7 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: quay.io/cdoan/dex-operator:0.0.1
+                image: controller:latest
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -232,8 +222,7 @@ spec:
     type: AllNamespaces
   keywords:
   - dex
-  - idp
-  - sso
+  - operator
   links:
   - name: Dex Operator
     url: https://dex-operator.domain
@@ -242,6 +231,6 @@ spec:
     name: cdoan
   maturity: alpha
   provider:
-    name: cdoan@redhat.com
+    name: redhat.com
     url: redhat.com
-  version: 0.0.1
+  version: 0.0.2

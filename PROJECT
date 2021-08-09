@@ -12,7 +12,17 @@ resources:
     namespaced: true
   controller: true
   domain: identitatem.io
-  kind: DexConfig
+  group: auth
+  kind: DexServer
+  path: github.com/identitatem/dex-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: identitatem.io
+  group: auth
+  kind: DexClient
   path: github.com/identitatem/dex-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

@@ -11,7 +11,7 @@ data:
       port: 9443
     leaderElection:
       leaderElect: true
-      resourceName: d4e1e7e1.identitatem.io
+      resourceName: 09c5986b.identitatem.io
 kind: ConfigMap
 metadata:
   name: dex-operator-manager-config

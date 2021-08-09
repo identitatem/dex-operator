@@ -7,6 +7,7 @@
 *.dylib
 bin
 testbin/*
+.history/*
 
 # Test binary, build with `go test -c`
 *.test
@@ -23,7 +24,3 @@ testbin/*
 *.swp
 *.swo
 *~
-
-hack/argocd*.yaml
-hack/community/ssl
-hack/gitops/ssl

@@ -1,6 +1,0 @@
-apiVersion: identitatem.io/v1alpha1
-kind: DexConfig
-metadata:
-  name: dex-server
-spec:
-  size: 1
