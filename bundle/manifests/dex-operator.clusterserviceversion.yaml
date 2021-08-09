@@ -11,7 +11,11 @@ metadata:
             "name": "dexclient-sample"
           },
           "spec": {
-            "foo": "bar"
+            "clientID": "openshift-client-id-example",
+            "clientSecret": "plain-text-openshift-client-secret-example",
+            "redirectURIs": [
+              "https://oauth-openshift.apps.pool-sno-8x32-n9kps.demo.red-chesterfield.com/oauth2callback/dexclient-sample"
+            ]
           }
         },
         {
@@ -21,7 +25,59 @@ metadata:
             "name": "dexserver-sample"
           },
           "spec": {
-            "foo": "bar"
+            "connectors": [
+              {
+                "config": {
+                  "clientID": "github-oauth-sample-id",
+                  "clientSecretRef": "github-secretref"
+                },
+                "id": "github",
+                "name": "github",
+                "type": "github"
+              }
+            ],
+            "enablePasswordDB": false,
+            "expiry": {
+              "deviceRequests": "5m",
+              "idTokens": "24h",
+              "refreshTokens": {
+                "absoluteLifetime": "3960h",
+                "reuseInterval": "3s",
+                "validIfNotUsedFor": "2160h"
+              },
+              "signingKeys": "6h"
+            },
+            "grpc": {
+              "addr": "0.0.0.0:5557",
+              "tlsCert": "secretRef",
+              "tlsClientCA": "secretRef",
+              "tlsKey": "secretRef"
+            },
+            "issuer": "https://dexserver-sample.apps.pool-sno-8x32-n9kps.demo.red-chesterfield.com/dex",
+            "logger": {
+              "format": "json",
+              "level": "1"
+            },
+            "oauth2": {
+              "alwasyShowLoginScreen": false,
+              "passwordConnector": "local",
+              "responseTypes": [
+                "code",
+                "token"
+              ],
+              "skipApprovalScreen": false
+            },
+            "storage": {
+              "config": {
+                "inCluster": true
+              },
+              "type": "kubernetes"
+            },
+            "web": {
+              "http": "0.0.0.0:5556",
+              "tlsCert": "secretRef",
+              "tlsKey": "secretRef"
+            }
           }
         }
       ]
@@ -149,7 +205,7 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: controller:latest
+                image: quay.io/cdoan/dex-operator:0.0.2
                 livenessProbe:
                   httpGet:
                     path: /healthz
