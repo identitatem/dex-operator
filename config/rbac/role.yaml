@@ -7,9 +7,9 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - apps
+  - auth.identitatem.io
   resources:
-  - deployments
+  - dexclients
   verbs:
   - create
   - delete
@@ -19,17 +19,23 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ""
+  - auth.identitatem.io
   resources:
-  - pods
+  - dexclients/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - auth.identitatem.io
+  resources:
+  - dexclients/status
   verbs:
   - get
-  - list
-  - watch
+  - patch
+  - update
 - apiGroups:
-  - ""
+  - auth.identitatem.io
   resources:
-  - services
+  - dexservers
   verbs:
   - create
   - delete
@@ -39,47 +45,16 @@ rules:
   - update
   - watch
 - apiGroups:
-  - identitatem.io
+  - auth.identitatem.io
   resources:
-  - dexconfigs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - identitatem.io
-  resources:
-  - dexconfigs/finalizers
+  - dexservers/finalizers
   verbs:
   - update
 - apiGroups:
-  - identitatem.io
+  - auth.identitatem.io
   resources:
-  - dexconfigs/status
+  - dexservers/status
   verbs:
   - get
   - patch
   - update
-- apiGroups:
-  - route.openshift.io
-  resources:
-  - routes
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - route.openshift.io
-  resources:
-  - routes/custom-host
-  verbs:
-  - create
-  - patch

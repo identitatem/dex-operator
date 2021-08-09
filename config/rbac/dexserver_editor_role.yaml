@@ -1,13 +1,13 @@
-# permissions for end users to edit dexconfigs.
+# permissions for end users to edit dexservers.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: dexconfig-editor-role
+  name: dexserver-editor-role
 rules:
 - apiGroups:
-  - identitatem.io
+  - auth.identitatem.io
   resources:
-  - dexconfigs
+  - dexservers
   verbs:
   - create
   - delete
@@ -17,8 +17,8 @@ rules:
   - update
   - watch
 - apiGroups:
-  - identitatem.io
+  - auth.identitatem.io
   resources:
-  - dexconfigs/status
+  - dexservers/status
   verbs:
   - get

@@ -1,0 +1,24 @@
+# permissions for end users to edit dexclients.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dexclient-editor-role
+rules:
+- apiGroups:
+  - auth.identitatem.io
+  resources:
+  - dexclients
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - auth.identitatem.io
+  resources:
+  - dexclients/status
+  verbs:
+  - get

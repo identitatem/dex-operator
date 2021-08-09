@@ -1,20 +1,20 @@
-# permissions for end users to view dexconfigs.
+# permissions for end users to view dexclients.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: dexconfig-viewer-role
+  name: dexclient-viewer-role
 rules:
 - apiGroups:
-  - identitatem.io
+  - auth.identitatem.io
   resources:
-  - dexconfigs
+  - dexclients
   verbs:
   - get
   - list
   - watch
 - apiGroups:
-  - identitatem.io
+  - auth.identitatem.io
   resources:
-  - dexconfigs/status
+  - dexclients/status
   verbs:
   - get
