@@ -25,17 +25,32 @@ import (
 
 // DexClientSpec defines the desired state of DexClient
 type DexClientSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of DexClient. Edit dexclient_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// +kubebuilder:validation:MinLength=4
+	// The name of the oidc config
+	ClientID string `json:"clientID,omitempty"`
+	// +kubebuilder:validation:MinLength=2
+	// +kubebuilder:validation:Required
+	// The shared oidc secret
+	ClientSecret string `json:"clientSecret,omitempty"`
+	// +optional
+	// Sets the public flag
+	Public bool `json:"public,omitempty"`
+	// Redirect URIs
+	RedirectURIs []string `json:"redirectURIs,omitempty"`
+	// +optional
+	// Trusted Peers
+	TrustedPeers []string `json:"trustedPeers,omitempty"`
+	// +optional
+	// LogoURL
+	LogoURL string `json:"logoURL,omitempty"`
 }
 
 // DexClientStatus defines the observed state of DexClient
 type DexClientStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// +optional
+	State string `json:"state,omitempty"`
+	// +optional
+	Message string `json:"message,omitempty"`
 }
 
 //+kubebuilder:object:root=true
