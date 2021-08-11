@@ -84,7 +84,7 @@ metadata:
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.9.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: dex-operator.v0.0.2
+  name: dex-operator.v0.0.3
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -109,6 +109,18 @@ spec:
     spec:
       clusterPermissions:
       - rules:
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
         - apiGroups:
           - auth.identitatem.io
           resources:
@@ -162,6 +174,67 @@ spec:
           - patch
           - update
         - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - serviceaccounts
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - services
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes/custom-host
+          verbs:
+          - create
+          - patch
+        - apiGroups:
           - authentication.k8s.io
           resources:
           - tokenreviews
@@ -205,7 +278,8 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: quay.io/cdoan/dex-operator:0.0.2
+                image: quay.io/cdoan/dex-operator:0.0.3
+                imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -221,11 +295,11 @@ spec:
                   periodSeconds: 10
                 resources:
                   limits:
-                    cpu: 100m
-                    memory: 30Mi
+                    cpu: 500m
+                    memory: 1000Mi
                   requests:
-                    cpu: 100m
-                    memory: 20Mi
+                    cpu: 500m
+                    memory: 700Mi
                 securityContext:
                   allowPrivilegeEscalation: false
               securityContext:
@@ -289,4 +363,4 @@ spec:
   provider:
     name: redhat.com
     url: redhat.com
-  version: 0.0.2
+  version: 0.0.3
