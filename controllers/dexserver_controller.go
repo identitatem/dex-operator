@@ -32,12 +32,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/identitatem/dex-operator/api/v1alpha1"
 	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
 )
 
 var (
-	apiGV = v1alpha1.GroupVersion.String()
+	apiGV = authv1alpha1.GroupVersion.String()
 	// TODO: stop using static sa when resolve setting up roles/bindings
 	saName = "dex-operator-dexsso"
 )
