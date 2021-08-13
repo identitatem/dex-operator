@@ -22,4 +22,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: dex-operator-dexsso
-  namespace: dex-community
+  namespace: dex-operator

@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -35,10 +36,15 @@ import (
 	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
 )
 
+const (
+	SECRET_MTLS_SUFFIX    = "-mtls"
+	SECRET_WEB_TLS_SUFFIX = "-tls-secret"
+	SERVICE_ACCOUNT_NAME  = "dex-operator-dexsso"
+	DEX_IMAGE             = "quay.io/dexidp/dex:v2.28.1"
+)
+
 var (
 	apiGV = authv1alpha1.GroupVersion.String()
-	// TODO: stop using static sa when resolve setting up roles/bindings
-	saName = "dex-operator-dexsso"
 )
 
 // DexServerReconciler reconciles a DexServer object
@@ -55,6 +61,7 @@ type DexServerReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes/custom-host,verbs=create;patch
 
@@ -82,7 +89,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		spec := r.defineConfigMap(dexServer)
 		log.Info("Creating a new ConfigMap", "ConfigMap.Namespace", spec.Namespace, "ConfigMap.Name", spec.Name)
 		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create configmap", spec.Name)
+			log.Info("failed to create configmap", "ConfigMap.Name", spec.Name)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
@@ -91,7 +98,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		spec := r.defineService(dexServer)
 		log.Info("Creating a new Service", "Service.Namespace", spec.Namespace, "Service.Name", spec.Name)
 		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create service", spec.Name)
+			log.Info("failed to create service", "Service.Name", spec.Name)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
@@ -100,16 +107,44 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		spec := r.defineServiceAccount(dexServer)
 		log.Info("Creating a new ServiceAccount", "ServiceAccount.Namespace", spec.Namespace, "ServiceAccount.Name", spec.Name)
 		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create ServiceAccount", saName)
+			log.Info("failed to create ServiceAccount", "ServiceAccount.Name", SERVICE_ACCOUNT_NAME)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
+
+	case isNotDefinedMTLSSecret(dexServer, r, ctx):
+		// create all the TLS here.
+		// * When the CA expires, regenerate everything?
+		// * When the cert expires, regenerate the cert?
+		// * For now, assume customer does not want to override the certs with their own BYO
+		caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM, err := createMTLS()
+		if err != nil {
+			log.Info("failed to generate ca, cert and key")
+			// return ctrl.Result{RequeueAfter: time.Second}, err
+			return ctrl.Result{Requeue: true}, nil
+		}
+		// log.Info("successfully defined the ca, cert, keys:",
+		// 	caPEM.String(),
+		// 	caPrivKeyPEM.String(),
+		// 	certPEM.String(),
+		// 	certPrivKeyPEM.String(),
+		// 	clientPEM.String(),
+		// 	clientPrivKeyPEM.String())
+
+		spec := r.defineSecret(dexServer, caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM)
+		log.Info("Creating a new Secret", "Secret.Namespace", spec.Namespace, "Secret.Name", spec.Name)
+		if err := r.Create(ctx, spec); err != nil {
+			log.Info("failed to create Secret", "Secret.Name", spec.Name)
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+		// return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 
 	case isNotDefinedDeployment(dexServer, r, ctx):
 		spec := r.defineDeployment(dexServer)
 		log.Info("Creating a new Deployment", "Deployment.Namespace", spec.Namespace, "Deployment.Name", spec.Name)
 		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create deployment", spec.Name)
+			log.Info("failed to create deployment", "Deployment.Name", spec.Name)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
@@ -118,27 +153,25 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		spec := r.defineRoute(dexServer)
 		log.Info("Creating a new Route", "Route.Namespace", spec.Namespace, "Route.Name", spec.Name)
 		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create Route", spec.Name)
+			log.Info("failed to create Route", "Route.Name", spec.Name)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
 
-	// case isdexServerNotYetStarted(dexServer, r.Client):
-	// 	_, err := r.startdexServer(ctx, dexServer, r.Client)
-	// 	if err != nil {
-	// 		log.Error(err, "could not start dexServer")
-	// 	}
-	// 	return ctrl.Result{}, err
-	// case isdexServerFinished(dexServer):
-	// 	log.V(2).Info("dex server instance stopped")
-	// 	return ctrl.Result{}, nil
-
+	// TODO(cdoan): check CA or CERT renew?
 	default:
-
 		log.Info("dexServer started and NOT finished")
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func isNotDefinedMTLSSecret(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
+	resource := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(m.Name + SECRET_MTLS_SUFFIX), Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
+		return true
+	}
+	return false
 }
 
 func isNotDefinedRoute(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
@@ -152,8 +185,12 @@ func isNotDefinedRoute(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx co
 func isNotDefinedServiceAccount(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
 	resource := &corev1.ServiceAccount{}
 	// if err := r.Get(ctx, types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
-	if err := r.Get(ctx, types.NamespacedName{Name: saName, Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
-		return true
+	if err := r.Get(ctx, types.NamespacedName{Name: SERVICE_ACCOUNT_NAME, Namespace: m.Namespace}, resource); err != nil {
+		if errors.IsNotFound(err) {
+			return true
+		} else {
+			return true
+		}
 	}
 	return false
 }
@@ -189,13 +226,37 @@ func isNotDefinedConfigmap(m *authv1alpha1.DexServer, r *DexServerReconciler, ct
 	return false
 }
 
+// Define the secret for grpc Mutual TLS. This secret is volume mounted on the dex instance pod. The client cert should be loaded by the gRPC client code.
+func (r *DexServerReconciler) defineSecret(m *authv1alpha1.DexServer, caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM *bytes.Buffer) *corev1.Secret {
+	labels := map[string]string{
+		"app": m.Name,
+	}
+	secretSpec := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf(m.Name + SECRET_MTLS_SUFFIX),
+			Namespace: m.Namespace,
+			Labels:    labels,
+		},
+		Data: map[string][]byte{
+			"ca.crt":     caPEM.Bytes(),
+			"ca.key":     caPrivKeyPEM.Bytes(),
+			"tls.crt":    append(certPEM.Bytes(), certPEM.Bytes()...),
+			"tls.key":    certPrivKeyPEM.Bytes(),
+			"client.crt": append(clientPEM.Bytes(), clientPEM.Bytes()...),
+			"client.key": clientPrivKeyPEM.Bytes(),
+		},
+	}
+	ctrl.SetControllerReference(m, secretSpec, r.Scheme)
+	return secretSpec
+}
+
 func (r *DexServerReconciler) defineServiceAccount(m *authv1alpha1.DexServer) *corev1.ServiceAccount {
 	labels := map[string]string{
 		"app": m.Name,
 	}
 	serviceAccountSpec := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "dex-operator-dexsso",
+			Name:      SERVICE_ACCOUNT_NAME,
 			Namespace: m.Namespace,
 			Labels:    labels,
 		},
@@ -204,6 +265,7 @@ func (r *DexServerReconciler) defineServiceAccount(m *authv1alpha1.DexServer) *c
 	return serviceAccountSpec
 }
 
+// Defines the dex instance (dex server).
 func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv1.Deployment {
 	ls := labelsForDexServer(m.Name, m.Namespace)
 	// replicas := m.Spec.Size
@@ -230,7 +292,7 @@ func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv
 							"serve",
 							"/etc/dex/cfg/config.yaml",
 						},
-						Image:           "quay.io/dexidp/dex:v2.28.1",
+						Image:           DEX_IMAGE,
 						ImagePullPolicy: corev1.PullAlways,
 						Name:            m.Name,
 						Env: []corev1.EnvVar{
@@ -260,6 +322,10 @@ func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv
 								Name:      "tls",
 								MountPath: "/etc/dex/tls",
 							},
+							{
+								Name:      "mtls",
+								MountPath: "/etc/dex/mtls",
+							},
 						},
 					}},
 					Volumes: []corev1.Volume{
@@ -285,7 +351,17 @@ func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv
 								Secret: &corev1.SecretVolumeSource{
 									// this secret is generated using service serving certificate via service annotation
 									// service.beta.openshift.io/serving-cert-secret-name: m.Name-tls-secret
-									SecretName: fmt.Sprintf(m.Name + "-tls-secret"),
+									SecretName: fmt.Sprintf(m.Name + SECRET_WEB_TLS_SUFFIX),
+								},
+							},
+						},
+						{
+							Name: "mtls",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									// This secret is generated by this controller, here we load the server side cert and ca
+									// service.beta.openshift.io/serving-cert-secret-name: m.Name-mtls-secret
+									SecretName: fmt.Sprintf(m.Name + SECRET_MTLS_SUFFIX),
 								},
 							},
 						},
@@ -296,7 +372,7 @@ func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv
 	}
 
 	// TODO: dep.Spec.Template.Spec.ServiceAccountName = m.Name
-	dep.Spec.Template.Spec.ServiceAccountName = "dex-operator-dexsso"
+	dep.Spec.Template.Spec.ServiceAccountName = SERVICE_ACCOUNT_NAME
 
 	ctrl.SetControllerReference(m, dep, r.Scheme)
 	return dep
@@ -316,7 +392,7 @@ func (r *DexServerReconciler) defineService(m *authv1alpha1.DexServer) *corev1.S
 			Namespace: m.Namespace,
 			Labels:    labels,
 			Annotations: map[string]string{
-				"service.beta.openshift.io/serving-cert-secret-name": fmt.Sprintf(m.Name + "-tls-secret"),
+				"service.beta.openshift.io/serving-cert-secret-name": fmt.Sprintf(m.Name + SECRET_WEB_TLS_SUFFIX),
 			},
 		},
 		Spec: corev1.ServiceSpec{
@@ -379,8 +455,8 @@ web:
   tlsKey: /etc/dex/tls/tls.key
 grpc:
   addr: 0.0.0.0:5557
-  tlsCert: /etc/dex/tls/tls.crt
-  tlsKey: /etc/dex/tls/tls.key
+  tlsCert: /etc/dex/mtls/tls.crt
+  tlsKey: /etc/dex/mtls/tls.key
   reflection: true
 connectors:
 - type: github
@@ -459,8 +535,9 @@ func (r *DexServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ServiceAccount{}).
+		Owns(&corev1.Secret{}).
 		Owns(&appsv1.Deployment{}).
-		Owns(&routev1.Route{}).
+		Owns(&routev1.Route{}). /* TODO(cdoan): add Ingress */
 		Complete(r)
 }
 

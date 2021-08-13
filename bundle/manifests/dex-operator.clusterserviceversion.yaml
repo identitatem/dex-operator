@@ -84,7 +84,7 @@ metadata:
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.9.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: dex-operator.v0.0.3
+  name: dex-operator.v0.0.4
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -196,6 +196,17 @@ spec:
         - apiGroups:
           - ""
           resources:
+          - secrets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
+          - ""
+          resources:
           - serviceaccounts
           verbs:
           - create
@@ -278,7 +289,7 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: quay.io/cdoan/dex-operator:0.0.3
+                image: quay.io/cdoan/dex-operator:0.0.4
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -295,11 +306,11 @@ spec:
                   periodSeconds: 10
                 resources:
                   limits:
-                    cpu: 500m
-                    memory: 1000Mi
+                    cpu: 300m
+                    memory: 500Mi
                   requests:
-                    cpu: 500m
-                    memory: 1000Mi
+                    cpu: 300m
+                    memory: 500Mi
                 securityContext:
                   allowPrivilegeEscalation: false
               securityContext:
@@ -363,4 +374,4 @@ spec:
   provider:
     name: redhat.com
     url: redhat.com
-  version: 0.0.3
+  version: 0.0.4
