@@ -457,6 +457,7 @@ grpc:
   addr: 0.0.0.0:5557
   tlsCert: /etc/dex/mtls/tls.crt
   tlsKey: /etc/dex/mtls/tls.key
+  tlsClientCA: /etc/dex/mtls/ca.crt
   reflection: true
 connectors:
 - type: github
