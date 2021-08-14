@@ -36,6 +36,25 @@ oc apply -f bundle/manifests/auth.identitatem.io_dexservers.yaml
 oc apply -f hack/deployment.yaml
 ```
 
+# Development
+
+## Dependencies
+
+From: https://grpc.io/docs/languages/go/quickstart/
+
+```bash=
+
+# install protobuf compilier
+$ brew install protobuf
+$ protoc --version  # Ensure compiler version is 3+
+$ protoc --version
+libprotoc 3.17.3
+
+# go plugins
+$ go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.26
+$ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.1
+```
+
 # References
 
 See Reference: https://hackmd.io/@0HKGaOf5Rg-SU-pJybkgKw/B1GhGowAO
