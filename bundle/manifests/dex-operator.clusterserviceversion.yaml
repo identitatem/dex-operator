@@ -13,6 +13,7 @@ metadata:
           "spec": {
             "clientID": "openshift-client-id-example",
             "clientSecret": "plain-text-openshift-client-secret-example",
+            "public": false,
             "redirectURIs": [
               "https://oauth-openshift.apps.pool-sno-8x32-n9kps.demo.red-chesterfield.com/oauth2callback/dexclient-sample"
             ]
@@ -306,11 +307,11 @@ spec:
                   periodSeconds: 10
                 resources:
                   limits:
-                    cpu: 300m
-                    memory: 500Mi
+                    cpu: 500m
+                    memory: 700Mi
                   requests:
-                    cpu: 300m
-                    memory: 500Mi
+                    cpu: 500m
+                    memory: 700Mi
                 securityContext:
                   allowPrivilegeEscalation: false
               securityContext:

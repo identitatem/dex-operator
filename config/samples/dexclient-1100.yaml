@@ -1,0 +1,11 @@
+apiVersion: auth.identitatem.io/v1alpha1
+kind: DexClient
+metadata:
+  name: dc1100
+spec:
+  clientID: "dc1100-clientid"
+  clientSecret: "dc1100-clientsecret"
+  redirectURIs:
+  - "https://oauth-openshift.apps.pool-sno-8x32-n9kps.demo.red-chesterfield.com/oauth2callback/dc1100"
+  public: false
+

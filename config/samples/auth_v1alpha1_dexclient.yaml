@@ -6,4 +6,6 @@ spec:
   clientID: "openshift-client-id-example"
   clientSecret: "plain-text-openshift-client-secret-example"
   redirectURIs:
-    - "https://oauth-openshift.apps.pool-sno-8x32-n9kps.demo.red-chesterfield.com/oauth2callback/dexclient-sample"
+  - "https://oauth-openshift.apps.pool-sno-8x32-n9kps.demo.red-chesterfield.com/oauth2callback/dexclient-sample"
+  public: false
+
