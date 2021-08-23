@@ -17,9 +17,9 @@ limitations under the License.
 package controllers
 
 import (
-	"path/filepath"
 	"testing"
 
+	"github.com/ghodss/yaml"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -29,6 +29,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	dexoperatorconfig "github.com/identitatem/dex-operator/config"
+
+	clusteradmasset "open-cluster-management.io/clusteradm/pkg/helpers/asset"
+
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
 	//+kubebuilder:scaffold:imports
@@ -52,9 +58,22 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
+	//This is to test if the CRD are available through resources.go
+	//as they are needed by other operators to dynamically install this operator
+	readerDex := dexoperatorconfig.GetScenarioResourcesReader()
+	dexClientCRD, err := getCRD(readerDex, "crd/bases/auth.identitatem.io_dexclients.yaml")
+	Expect(err).Should(BeNil())
+
+	dexServerCRD, err := getCRD(readerDex, "crd/bases/auth.identitatem.io_dexservers.yaml")
+	Expect(err).Should(BeNil())
+
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
+		CRDs: []client.Object{
+			dexClientCRD,
+			dexServerCRD,
+		},
+		// CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
 
@@ -81,3 +100,16 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 })
+
+func getCRD(reader *clusteradmasset.ScenarioResourcesReader, file string) (*apiextensionsv1.CustomResourceDefinition, error) {
+	b, err := reader.Asset(file)
+	if err != nil {
+		return nil, err
+	}
+	crd := &apiextensionsv1.CustomResourceDefinition{}
+	if err := yaml.Unmarshal(b, crd); err != nil {
+		return nil, err
+	}
+	return crd, nil
+	// apiClient.ApiextensionsV1().CustomResourceDefinitions().Get()
+}

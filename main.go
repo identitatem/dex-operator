@@ -85,8 +85,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	//Install CRD
-
+	//Install the CRDs
 	kubeClient := kubernetes.NewForConfigOrDie(ctrl.GetConfigOrDie())
 	dynamicClient := dynamic.NewForConfigOrDie(ctrl.GetConfigOrDie())
 	apiExtensionClient := apiextensionsclient.NewForConfigOrDie(ctrl.GetConfigOrDie())
@@ -96,10 +95,12 @@ func main() {
 
 	readerConfig := dexconfig.GetScenarioResourcesReader()
 
-	file := "crd/bases/identityconfig.identitatem.io_authrealms.yaml"
-	_, err = applier.ApplyDirectly(readerConfig, nil, false, "", file)
+	files := []string{"crd/bases/auth.identitatem.io_dexclients.yaml",
+		"crd/bases/auth.identitatem.io_dexservers.yaml"}
+
+	_, err = applier.ApplyDirectly(readerConfig, nil, false, "", files...)
 	if err != nil {
-		setupLog.Error(err, "unable to create install the crd for controller", "crd", file, "controller", "AuthRealm")
+		setupLog.Error(err, "unable to create install the crds for controller", "crds", files)
 		os.Exit(1)
 	}
 

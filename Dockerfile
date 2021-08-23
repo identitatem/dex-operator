@@ -15,7 +15,10 @@ RUN go mod download
 COPY main.go main.go
 COPY api/ api/
 COPY controllers/ controllers/
-COPY config/ config/
+# Add config files
+COPY config/resources.go config/resources.go
+COPY config/rbac/ config/rbac/
+COPY config/crd/bases/ config/crd/bases/
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
