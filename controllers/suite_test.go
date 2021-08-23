@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/ghodss/yaml"
@@ -58,22 +59,9 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-	//This is to test if the CRD are available through resources.go
-	//as they are needed by other operators to dynamically install this operator
-	readerDex := dexoperatorconfig.GetScenarioResourcesReader()
-	dexClientCRD, err := getCRD(readerDex, "crd/bases/auth.identitatem.io_dexclients.yaml")
-	Expect(err).Should(BeNil())
-
-	dexServerCRD, err := getCRD(readerDex, "crd/bases/auth.identitatem.io_dexservers.yaml")
-	Expect(err).Should(BeNil())
-
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDs: []client.Object{
-			dexClientCRD,
-			dexServerCRD,
-		},
-		// CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
+		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
 
@@ -99,6 +87,19 @@ var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
+})
+
+var _ = Describe("Setup Dex", func() {
+	By("Checking the CRDs availability", func() {
+		//This is to test if the CRD are available through resources.go
+		//as they are needed by other operators to dynamically install this operator
+		readerDex := dexoperatorconfig.GetScenarioResourcesReader()
+		_, err := getCRD(readerDex, "crd/bases/auth.identitatem.io_dexclients.yaml")
+		Expect(err).Should(BeNil())
+
+		_, err = getCRD(readerDex, "crd/bases/auth.identitatem.io_dexservers.yaml")
+		Expect(err).Should(BeNil())
+	})
 })
 
 func getCRD(reader *clusteradmasset.ScenarioResourcesReader, file string) (*apiextensionsv1.CustomResourceDefinition, error) {
