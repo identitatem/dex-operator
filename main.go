@@ -24,10 +24,15 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	dexconfig "github.com/identitatem/dex-operator/config"
 	routev1 "github.com/openshift/api/route/v1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	clusteradmapply "open-cluster-management.io/clusteradm/pkg/helpers/apply"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -77,6 +82,25 @@ func main() {
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
+	}
+
+	//Install the CRDs
+	kubeClient := kubernetes.NewForConfigOrDie(ctrl.GetConfigOrDie())
+	dynamicClient := dynamic.NewForConfigOrDie(ctrl.GetConfigOrDie())
+	apiExtensionClient := apiextensionsclient.NewForConfigOrDie(ctrl.GetConfigOrDie())
+
+	applierBuilder := &clusteradmapply.ApplierBuilder{}
+	applier := applierBuilder.WithClient(kubeClient, apiExtensionClient, dynamicClient).Build()
+
+	readerConfig := dexconfig.GetScenarioResourcesReader()
+
+	files := []string{"crd/bases/auth.identitatem.io_dexclients.yaml",
+		"crd/bases/auth.identitatem.io_dexservers.yaml"}
+
+	_, err = applier.ApplyDirectly(readerConfig, nil, false, "", files...)
+	if err != nil {
+		setupLog.Error(err, "unable to create install the crds for controller", "crds", files)
 		os.Exit(1)
 	}
 
