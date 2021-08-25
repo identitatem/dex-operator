@@ -37,15 +37,24 @@ import (
 )
 
 const (
+	SECRET_MTLS_NAME      = "mtls-secret"
 	SECRET_MTLS_SUFFIX    = "-mtls"
 	SECRET_WEB_TLS_SUFFIX = "-tls-secret"
 	SERVICE_ACCOUNT_NAME  = "dex-operator-dexsso"
+	GRPC_SERVICE_NAME     = "dex"
 	DEX_IMAGE             = "quay.io/dexidp/dex:v2.28.1"
 )
 
 var (
 	apiGV = authv1alpha1.GroupVersion.String()
+	ctls  ClientTLS
 )
+
+type ClientTLS struct {
+	caPEM            *bytes.Buffer
+	clientPEM        *bytes.Buffer
+	clientPrivKeyPEM *bytes.Buffer
+}
 
 // DexServerReconciler reconciles a DexServer object
 type DexServerReconciler struct {
@@ -77,15 +86,29 @@ type DexServerReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	// _ = log.FromContext(ctx)
-	// dexServerLogger := log.FromContext(ctx)
-
 	log := ctrllog.FromContext(ctx)
 	dexServer := &authv1alpha1.DexServer{}
 	if err := r.Get(ctx, req.NamespacedName, dexServer); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	switch {
+
+	case isNotDefinedMTLSSecret(dexServer, r, ctx):
+		caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM, err := createMTLS()
+		if err != nil {
+			log.Info("failed to generate ca, cert and key")
+			return ctrl.Result{}, err
+		}
+		spec := r.defineSecret(dexServer, caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM)
+		log.Info("Creating a new Secret", "Secret.Namespace", spec.Namespace, "Secret.Name", spec.Name)
+		if err := r.Create(ctx, spec); err != nil {
+			log.Info("failed to create Secret", "Secret.Name", spec.Name)
+			return ctrl.Result{}, err
+		}
+		ctls.caPEM = caPEM
+		ctls.clientPEM = clientPEM
+		ctls.clientPrivKeyPEM = clientPrivKeyPEM
+		return ctrl.Result{Requeue: true}, nil
 
 	case isNotDefinedConfigmap(dexServer, r, ctx):
 		spec := r.defineConfigMap(dexServer)
@@ -103,6 +126,12 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			log.Info("failed to create service", "Service.Name", spec.Name)
 			return ctrl.Result{}, err
 		}
+		specGrpc := r.defineServiceGrpc(dexServer)
+		log.Info("Creating a new Service", "Service.Namespace", specGrpc.Namespace, "Service.Name", specGrpc.Name)
+		if err := r.Create(ctx, specGrpc); err != nil {
+			log.Info("failed to create grpc service", "Service.Name", specGrpc.Name)
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{Requeue: true}, nil
 
 	case isNotDefinedServiceAccount(dexServer, r, ctx):
@@ -113,34 +142,6 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
-
-	case isNotDefinedMTLSSecret(dexServer, r, ctx):
-		// create all the TLS here.
-		// * When the CA expires, regenerate everything?
-		// * When the cert expires, regenerate the cert?
-		// * For now, assume customer does not want to override the certs with their own BYO
-		caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM, err := createMTLS()
-		if err != nil {
-			log.Info("failed to generate ca, cert and key")
-			// return ctrl.Result{RequeueAfter: time.Second}, err
-			return ctrl.Result{Requeue: true}, nil
-		}
-		// log.Info("successfully defined the ca, cert, keys:",
-		// 	caPEM.String(),
-		// 	caPrivKeyPEM.String(),
-		// 	certPEM.String(),
-		// 	certPrivKeyPEM.String(),
-		// 	clientPEM.String(),
-		// 	clientPrivKeyPEM.String())
-
-		spec := r.defineSecret(dexServer, caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM)
-		log.Info("Creating a new Secret", "Secret.Namespace", spec.Namespace, "Secret.Name", spec.Name)
-		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create Secret", "Secret.Name", spec.Name)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{Requeue: true}, nil
-		// return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 
 	case isNotDefinedDeployment(dexServer, r, ctx):
 		spec := r.defineDeployment(dexServer)
@@ -405,6 +406,30 @@ func (r *DexServerReconciler) defineService(m *authv1alpha1.DexServer) *corev1.S
 					Protocol: "TCP",
 					Name:     "http",
 				},
+			},
+			Selector: matchlabels,
+		},
+	}
+	ctrl.SetControllerReference(m, resource, r.Scheme)
+	return resource
+}
+
+func (r *DexServerReconciler) defineServiceGrpc(m *authv1alpha1.DexServer) *corev1.Service {
+	labels := map[string]string{
+		"app": m.Name,
+	}
+	matchlabels := map[string]string{
+		"app": m.Name,
+	}
+	resource := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      GRPC_SERVICE_NAME,
+			Namespace: m.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeClusterIP,
+			Ports: []corev1.ServicePort{
 				{
 					Port:     5557,
 					Protocol: "TCP",
@@ -459,6 +484,7 @@ grpc:
   addr: 0.0.0.0:5557
   tlsCert: /etc/dex/mtls/tls.crt
   tlsKey: /etc/dex/mtls/tls.key
+  tlsClientCA: /etc/dex/mtls/ca.crt
   reflection: true
 connectors:
 - type: github

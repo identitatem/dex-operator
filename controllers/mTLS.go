@@ -17,14 +17,13 @@ import (
 )
 
 const (
-	PRIVATE_KEY_SIZE = 4096
-	CN               = "dex"
+	PRIVATE_KEY_SIZE = 2048
 )
 
 var (
 	serialNumberLimit = new(big.Int).Lsh(big.NewInt(1), 128)
-	dns               = []string{"dex", "dex.svc"}
-	certDuration      = time.Hour * 1
+	dns               = []string{GRPC_SERVICE_NAME}
+	certDuration      = time.Hour * 24
 )
 
 func GetCertDuration() time.Duration {
@@ -32,17 +31,15 @@ func GetCertDuration() time.Duration {
 }
 
 func createMTLS() (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, error) {
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	if err != nil {
-	}
-
+	// TODO(cdoan): handle the error, and put this into a function to reuse
+	serialNumber, _ := rand.Int(rand.Reader, serialNumberLimit)
 	ca := &x509.Certificate{
 		// SerialNumber: big.NewInt(2019),
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			Organization: []string{"Red Hat, Inc."},
 			Country:      []string{"US"},
-			CommonName:   CN,
+			CommonName:   GRPC_SERVICE_NAME,
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(GetCertDuration()),
@@ -51,7 +48,6 @@ func createMTLS() (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
 	}
-
 	// generate a private key
 	caPrivKey, err := rsa.GenerateKey(rand.Reader, PRIVATE_KEY_SIZE)
 	if err != nil {
@@ -62,19 +58,15 @@ func createMTLS() (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
-
 	// convert to PEM
 	caPEM, caPrivKeyPEM := PEMEncode(caBytes, caPrivKey)
-
-	serialNumber, err = rand.Int(rand.Reader, serialNumberLimit)
-	if err != nil {
-	}
+	serialNumber, _ = rand.Int(rand.Reader, serialNumberLimit)
 	cert := &x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			Organization: []string{"Red Hat, Inc."},
 			Country:      []string{"US"},
-			CommonName:   CN,
+			CommonName:   GRPC_SERVICE_NAME,
 		},
 		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
 		NotBefore:    time.Now(),
@@ -88,7 +80,7 @@ func createMTLS() (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *
 		// dns[0] = CN
 		cert.DNSNames = dns
 	} else {
-		cert.DNSNames = []string{CN}
+		cert.DNSNames = []string{GRPC_SERVICE_NAME}
 	}
 
 	certPrivKey, err := rsa.GenerateKey(rand.Reader, PRIVATE_KEY_SIZE)
@@ -111,14 +103,15 @@ func createMTLS() (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *
 		Subject: pkix.Name{
 			Organization: []string{"Red Hat, Inc."},
 			Country:      []string{"US"},
-			CommonName:   CN,
+			CommonName:   GRPC_SERVICE_NAME,
 		},
 		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
 		NotBefore:    time.Now(),
 		NotAfter:     time.Now().Add(GetCertDuration()),
 		SubjectKeyId: []byte{1, 2, 3, 4, 6},
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		// ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 	}
 	clientPrivKey, err := rsa.GenerateKey(rand.Reader, PRIVATE_KEY_SIZE)
 	if err != nil {
@@ -183,7 +176,7 @@ func bufferToFile(name string, thing []byte) {
 	}
 }
 
-func verifyCAvCert() error {
+func verifyCACert() error {
 	out, err := exec.Command("openssl", "verify", "-CAfile", "ca.crt", "server.crt").Output()
 	if err != nil {
 		log.Fatal(err)

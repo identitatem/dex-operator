@@ -44,3 +44,12 @@ proto:
 	--go-grpc_out=. \
 	--go-grpc_opt=paths=source_relative \
 	pkg/api/api.proto
+
+.PHONY: check
+check:
+	oc get secrets mtls-secret-mtls -ojsonpath='{.data.\ca\.crt}' | base64 --decode > ca.crt
+	oc get secrets mtls-secret-mtls -ojsonpath='{.data.\client\.crt}' | base64 --decode > client.crt
+	oc get secrets mtls-secret-mtls -ojsonpath='{.data.\tls\.crt}' | base64 --decode > tls.crt
+	openssl verify -CAfile ca.crt tls.crt
+	openssl verify -CAfile ca.crt client.crt
+	rm ca.crt client.crt tls.crt
