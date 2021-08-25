@@ -1,0 +1,9 @@
+apiVersion: auth.identitatem.io/v1alpha1
+kind: DexClient
+metadata:
+  name: dexclient01
+spec:
+  clientID: "dexclient01-clientid"
+  clientSecret: "dexclient01-clientsecret"
+  redirectURIs:
+  - "https://oauth-openshift.apps.example.red-chesterfield.com/oauth2callback/dexclient01"

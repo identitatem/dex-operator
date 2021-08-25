@@ -14,10 +14,10 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-// ApiDexClient is the client API for ApiDex service.
+// DexClient is the client API for Dex service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type ApiDexClient interface {
+type DexClient interface {
 	// CreateClient creates a client.
 	CreateClient(ctx context.Context, in *CreateClientReq, opts ...grpc.CallOption) (*CreateClientResp, error)
 	// UpdateClient updates an existing client
@@ -44,117 +44,117 @@ type ApiDexClient interface {
 	VerifyPassword(ctx context.Context, in *VerifyPasswordReq, opts ...grpc.CallOption) (*VerifyPasswordResp, error)
 }
 
-type apiDexClient struct {
+type dexClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewApiDexClient(cc grpc.ClientConnInterface) ApiDexClient {
-	return &apiDexClient{cc}
+func NewDexClient(cc grpc.ClientConnInterface) DexClient {
+	return &dexClient{cc}
 }
 
-func (c *apiDexClient) CreateClient(ctx context.Context, in *CreateClientReq, opts ...grpc.CallOption) (*CreateClientResp, error) {
+func (c *dexClient) CreateClient(ctx context.Context, in *CreateClientReq, opts ...grpc.CallOption) (*CreateClientResp, error) {
 	out := new(CreateClientResp)
-	err := c.cc.Invoke(ctx, "/api.ApiDex/CreateClient", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/api.Dex/CreateClient", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *apiDexClient) UpdateClient(ctx context.Context, in *UpdateClientReq, opts ...grpc.CallOption) (*UpdateClientResp, error) {
+func (c *dexClient) UpdateClient(ctx context.Context, in *UpdateClientReq, opts ...grpc.CallOption) (*UpdateClientResp, error) {
 	out := new(UpdateClientResp)
-	err := c.cc.Invoke(ctx, "/api.ApiDex/UpdateClient", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/api.Dex/UpdateClient", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *apiDexClient) DeleteClient(ctx context.Context, in *DeleteClientReq, opts ...grpc.CallOption) (*DeleteClientResp, error) {
+func (c *dexClient) DeleteClient(ctx context.Context, in *DeleteClientReq, opts ...grpc.CallOption) (*DeleteClientResp, error) {
 	out := new(DeleteClientResp)
-	err := c.cc.Invoke(ctx, "/api.ApiDex/DeleteClient", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/api.Dex/DeleteClient", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *apiDexClient) CreatePassword(ctx context.Context, in *CreatePasswordReq, opts ...grpc.CallOption) (*CreatePasswordResp, error) {
+func (c *dexClient) CreatePassword(ctx context.Context, in *CreatePasswordReq, opts ...grpc.CallOption) (*CreatePasswordResp, error) {
 	out := new(CreatePasswordResp)
-	err := c.cc.Invoke(ctx, "/api.ApiDex/CreatePassword", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/api.Dex/CreatePassword", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *apiDexClient) UpdatePassword(ctx context.Context, in *UpdatePasswordReq, opts ...grpc.CallOption) (*UpdatePasswordResp, error) {
+func (c *dexClient) UpdatePassword(ctx context.Context, in *UpdatePasswordReq, opts ...grpc.CallOption) (*UpdatePasswordResp, error) {
 	out := new(UpdatePasswordResp)
-	err := c.cc.Invoke(ctx, "/api.ApiDex/UpdatePassword", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/api.Dex/UpdatePassword", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *apiDexClient) DeletePassword(ctx context.Context, in *DeletePasswordReq, opts ...grpc.CallOption) (*DeletePasswordResp, error) {
+func (c *dexClient) DeletePassword(ctx context.Context, in *DeletePasswordReq, opts ...grpc.CallOption) (*DeletePasswordResp, error) {
 	out := new(DeletePasswordResp)
-	err := c.cc.Invoke(ctx, "/api.ApiDex/DeletePassword", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/api.Dex/DeletePassword", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *apiDexClient) ListPasswords(ctx context.Context, in *ListPasswordReq, opts ...grpc.CallOption) (*ListPasswordResp, error) {
+func (c *dexClient) ListPasswords(ctx context.Context, in *ListPasswordReq, opts ...grpc.CallOption) (*ListPasswordResp, error) {
 	out := new(ListPasswordResp)
-	err := c.cc.Invoke(ctx, "/api.ApiDex/ListPasswords", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/api.Dex/ListPasswords", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *apiDexClient) GetVersion(ctx context.Context, in *VersionReq, opts ...grpc.CallOption) (*VersionResp, error) {
+func (c *dexClient) GetVersion(ctx context.Context, in *VersionReq, opts ...grpc.CallOption) (*VersionResp, error) {
 	out := new(VersionResp)
-	err := c.cc.Invoke(ctx, "/api.ApiDex/GetVersion", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/api.Dex/GetVersion", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *apiDexClient) ListRefresh(ctx context.Context, in *ListRefreshReq, opts ...grpc.CallOption) (*ListRefreshResp, error) {
+func (c *dexClient) ListRefresh(ctx context.Context, in *ListRefreshReq, opts ...grpc.CallOption) (*ListRefreshResp, error) {
 	out := new(ListRefreshResp)
-	err := c.cc.Invoke(ctx, "/api.ApiDex/ListRefresh", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/api.Dex/ListRefresh", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *apiDexClient) RevokeRefresh(ctx context.Context, in *RevokeRefreshReq, opts ...grpc.CallOption) (*RevokeRefreshResp, error) {
+func (c *dexClient) RevokeRefresh(ctx context.Context, in *RevokeRefreshReq, opts ...grpc.CallOption) (*RevokeRefreshResp, error) {
 	out := new(RevokeRefreshResp)
-	err := c.cc.Invoke(ctx, "/api.ApiDex/RevokeRefresh", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/api.Dex/RevokeRefresh", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *apiDexClient) VerifyPassword(ctx context.Context, in *VerifyPasswordReq, opts ...grpc.CallOption) (*VerifyPasswordResp, error) {
+func (c *dexClient) VerifyPassword(ctx context.Context, in *VerifyPasswordReq, opts ...grpc.CallOption) (*VerifyPasswordResp, error) {
 	out := new(VerifyPasswordResp)
-	err := c.cc.Invoke(ctx, "/api.ApiDex/VerifyPassword", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/api.Dex/VerifyPassword", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// ApiDexServer is the server API for ApiDex service.
-// All implementations must embed UnimplementedApiDexServer
+// DexServer is the server API for Dex service.
+// All implementations must embed UnimplementedDexServer
 // for forward compatibility
-type ApiDexServer interface {
+type DexServer interface {
 	// CreateClient creates a client.
 	CreateClient(context.Context, *CreateClientReq) (*CreateClientResp, error)
 	// UpdateClient updates an existing client
@@ -179,307 +179,307 @@ type ApiDexServer interface {
 	RevokeRefresh(context.Context, *RevokeRefreshReq) (*RevokeRefreshResp, error)
 	// VerifyPassword returns whether a password matches a hash for a specific email or not.
 	VerifyPassword(context.Context, *VerifyPasswordReq) (*VerifyPasswordResp, error)
-	mustEmbedUnimplementedApiDexServer()
+	mustEmbedUnimplementedDexServer()
 }
 
-// UnimplementedApiDexServer must be embedded to have forward compatible implementations.
-type UnimplementedApiDexServer struct {
+// UnimplementedDexServer must be embedded to have forward compatible implementations.
+type UnimplementedDexServer struct {
 }
 
-func (UnimplementedApiDexServer) CreateClient(context.Context, *CreateClientReq) (*CreateClientResp, error) {
+func (UnimplementedDexServer) CreateClient(context.Context, *CreateClientReq) (*CreateClientResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateClient not implemented")
 }
-func (UnimplementedApiDexServer) UpdateClient(context.Context, *UpdateClientReq) (*UpdateClientResp, error) {
+func (UnimplementedDexServer) UpdateClient(context.Context, *UpdateClientReq) (*UpdateClientResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateClient not implemented")
 }
-func (UnimplementedApiDexServer) DeleteClient(context.Context, *DeleteClientReq) (*DeleteClientResp, error) {
+func (UnimplementedDexServer) DeleteClient(context.Context, *DeleteClientReq) (*DeleteClientResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteClient not implemented")
 }
-func (UnimplementedApiDexServer) CreatePassword(context.Context, *CreatePasswordReq) (*CreatePasswordResp, error) {
+func (UnimplementedDexServer) CreatePassword(context.Context, *CreatePasswordReq) (*CreatePasswordResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreatePassword not implemented")
 }
-func (UnimplementedApiDexServer) UpdatePassword(context.Context, *UpdatePasswordReq) (*UpdatePasswordResp, error) {
+func (UnimplementedDexServer) UpdatePassword(context.Context, *UpdatePasswordReq) (*UpdatePasswordResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdatePassword not implemented")
 }
-func (UnimplementedApiDexServer) DeletePassword(context.Context, *DeletePasswordReq) (*DeletePasswordResp, error) {
+func (UnimplementedDexServer) DeletePassword(context.Context, *DeletePasswordReq) (*DeletePasswordResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeletePassword not implemented")
 }
-func (UnimplementedApiDexServer) ListPasswords(context.Context, *ListPasswordReq) (*ListPasswordResp, error) {
+func (UnimplementedDexServer) ListPasswords(context.Context, *ListPasswordReq) (*ListPasswordResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPasswords not implemented")
 }
-func (UnimplementedApiDexServer) GetVersion(context.Context, *VersionReq) (*VersionResp, error) {
+func (UnimplementedDexServer) GetVersion(context.Context, *VersionReq) (*VersionResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
 }
-func (UnimplementedApiDexServer) ListRefresh(context.Context, *ListRefreshReq) (*ListRefreshResp, error) {
+func (UnimplementedDexServer) ListRefresh(context.Context, *ListRefreshReq) (*ListRefreshResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListRefresh not implemented")
 }
-func (UnimplementedApiDexServer) RevokeRefresh(context.Context, *RevokeRefreshReq) (*RevokeRefreshResp, error) {
+func (UnimplementedDexServer) RevokeRefresh(context.Context, *RevokeRefreshReq) (*RevokeRefreshResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RevokeRefresh not implemented")
 }
-func (UnimplementedApiDexServer) VerifyPassword(context.Context, *VerifyPasswordReq) (*VerifyPasswordResp, error) {
+func (UnimplementedDexServer) VerifyPassword(context.Context, *VerifyPasswordReq) (*VerifyPasswordResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyPassword not implemented")
 }
-func (UnimplementedApiDexServer) mustEmbedUnimplementedApiDexServer() {}
+func (UnimplementedDexServer) mustEmbedUnimplementedDexServer() {}
 
-// UnsafeApiDexServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to ApiDexServer will
+// UnsafeDexServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to DexServer will
 // result in compilation errors.
-type UnsafeApiDexServer interface {
-	mustEmbedUnimplementedApiDexServer()
+type UnsafeDexServer interface {
+	mustEmbedUnimplementedDexServer()
 }
 
-func RegisterApiDexServer(s grpc.ServiceRegistrar, srv ApiDexServer) {
-	s.RegisterService(&ApiDex_ServiceDesc, srv)
+func RegisterDexServer(s grpc.ServiceRegistrar, srv DexServer) {
+	s.RegisterService(&Dex_ServiceDesc, srv)
 }
 
-func _ApiDex_CreateClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Dex_CreateClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateClientReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiDexServer).CreateClient(ctx, in)
+		return srv.(DexServer).CreateClient(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.ApiDex/CreateClient",
+		FullMethod: "/api.Dex/CreateClient",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiDexServer).CreateClient(ctx, req.(*CreateClientReq))
+		return srv.(DexServer).CreateClient(ctx, req.(*CreateClientReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ApiDex_UpdateClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Dex_UpdateClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpdateClientReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiDexServer).UpdateClient(ctx, in)
+		return srv.(DexServer).UpdateClient(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.ApiDex/UpdateClient",
+		FullMethod: "/api.Dex/UpdateClient",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiDexServer).UpdateClient(ctx, req.(*UpdateClientReq))
+		return srv.(DexServer).UpdateClient(ctx, req.(*UpdateClientReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ApiDex_DeleteClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Dex_DeleteClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteClientReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiDexServer).DeleteClient(ctx, in)
+		return srv.(DexServer).DeleteClient(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.ApiDex/DeleteClient",
+		FullMethod: "/api.Dex/DeleteClient",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiDexServer).DeleteClient(ctx, req.(*DeleteClientReq))
+		return srv.(DexServer).DeleteClient(ctx, req.(*DeleteClientReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ApiDex_CreatePassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Dex_CreatePassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreatePasswordReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiDexServer).CreatePassword(ctx, in)
+		return srv.(DexServer).CreatePassword(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.ApiDex/CreatePassword",
+		FullMethod: "/api.Dex/CreatePassword",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiDexServer).CreatePassword(ctx, req.(*CreatePasswordReq))
+		return srv.(DexServer).CreatePassword(ctx, req.(*CreatePasswordReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ApiDex_UpdatePassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Dex_UpdatePassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpdatePasswordReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiDexServer).UpdatePassword(ctx, in)
+		return srv.(DexServer).UpdatePassword(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.ApiDex/UpdatePassword",
+		FullMethod: "/api.Dex/UpdatePassword",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiDexServer).UpdatePassword(ctx, req.(*UpdatePasswordReq))
+		return srv.(DexServer).UpdatePassword(ctx, req.(*UpdatePasswordReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ApiDex_DeletePassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Dex_DeletePassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeletePasswordReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiDexServer).DeletePassword(ctx, in)
+		return srv.(DexServer).DeletePassword(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.ApiDex/DeletePassword",
+		FullMethod: "/api.Dex/DeletePassword",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiDexServer).DeletePassword(ctx, req.(*DeletePasswordReq))
+		return srv.(DexServer).DeletePassword(ctx, req.(*DeletePasswordReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ApiDex_ListPasswords_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Dex_ListPasswords_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListPasswordReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiDexServer).ListPasswords(ctx, in)
+		return srv.(DexServer).ListPasswords(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.ApiDex/ListPasswords",
+		FullMethod: "/api.Dex/ListPasswords",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiDexServer).ListPasswords(ctx, req.(*ListPasswordReq))
+		return srv.(DexServer).ListPasswords(ctx, req.(*ListPasswordReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ApiDex_GetVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Dex_GetVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VersionReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiDexServer).GetVersion(ctx, in)
+		return srv.(DexServer).GetVersion(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.ApiDex/GetVersion",
+		FullMethod: "/api.Dex/GetVersion",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiDexServer).GetVersion(ctx, req.(*VersionReq))
+		return srv.(DexServer).GetVersion(ctx, req.(*VersionReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ApiDex_ListRefresh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Dex_ListRefresh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRefreshReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiDexServer).ListRefresh(ctx, in)
+		return srv.(DexServer).ListRefresh(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.ApiDex/ListRefresh",
+		FullMethod: "/api.Dex/ListRefresh",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiDexServer).ListRefresh(ctx, req.(*ListRefreshReq))
+		return srv.(DexServer).ListRefresh(ctx, req.(*ListRefreshReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ApiDex_RevokeRefresh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Dex_RevokeRefresh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RevokeRefreshReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiDexServer).RevokeRefresh(ctx, in)
+		return srv.(DexServer).RevokeRefresh(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.ApiDex/RevokeRefresh",
+		FullMethod: "/api.Dex/RevokeRefresh",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiDexServer).RevokeRefresh(ctx, req.(*RevokeRefreshReq))
+		return srv.(DexServer).RevokeRefresh(ctx, req.(*RevokeRefreshReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ApiDex_VerifyPassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Dex_VerifyPassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VerifyPasswordReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiDexServer).VerifyPassword(ctx, in)
+		return srv.(DexServer).VerifyPassword(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.ApiDex/VerifyPassword",
+		FullMethod: "/api.Dex/VerifyPassword",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiDexServer).VerifyPassword(ctx, req.(*VerifyPasswordReq))
+		return srv.(DexServer).VerifyPassword(ctx, req.(*VerifyPasswordReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// ApiDex_ServiceDesc is the grpc.ServiceDesc for ApiDex service.
+// Dex_ServiceDesc is the grpc.ServiceDesc for Dex service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var ApiDex_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "api.ApiDex",
-	HandlerType: (*ApiDexServer)(nil),
+var Dex_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "api.Dex",
+	HandlerType: (*DexServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "CreateClient",
-			Handler:    _ApiDex_CreateClient_Handler,
+			Handler:    _Dex_CreateClient_Handler,
 		},
 		{
 			MethodName: "UpdateClient",
-			Handler:    _ApiDex_UpdateClient_Handler,
+			Handler:    _Dex_UpdateClient_Handler,
 		},
 		{
 			MethodName: "DeleteClient",
-			Handler:    _ApiDex_DeleteClient_Handler,
+			Handler:    _Dex_DeleteClient_Handler,
 		},
 		{
 			MethodName: "CreatePassword",
-			Handler:    _ApiDex_CreatePassword_Handler,
+			Handler:    _Dex_CreatePassword_Handler,
 		},
 		{
 			MethodName: "UpdatePassword",
-			Handler:    _ApiDex_UpdatePassword_Handler,
+			Handler:    _Dex_UpdatePassword_Handler,
 		},
 		{
 			MethodName: "DeletePassword",
-			Handler:    _ApiDex_DeletePassword_Handler,
+			Handler:    _Dex_DeletePassword_Handler,
 		},
 		{
 			MethodName: "ListPasswords",
-			Handler:    _ApiDex_ListPasswords_Handler,
+			Handler:    _Dex_ListPasswords_Handler,
 		},
 		{
 			MethodName: "GetVersion",
-			Handler:    _ApiDex_GetVersion_Handler,
+			Handler:    _Dex_GetVersion_Handler,
 		},
 		{
 			MethodName: "ListRefresh",
-			Handler:    _ApiDex_ListRefresh_Handler,
+			Handler:    _Dex_ListRefresh_Handler,
 		},
 		{
 			MethodName: "RevokeRefresh",
-			Handler:    _ApiDex_RevokeRefresh_Handler,
+			Handler:    _Dex_RevokeRefresh_Handler,
 		},
 		{
 			MethodName: "VerifyPassword",
-			Handler:    _ApiDex_VerifyPassword_Handler,
+			Handler:    _Dex_VerifyPassword_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
