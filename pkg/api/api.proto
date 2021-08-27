@@ -160,7 +160,7 @@ message VerifyPasswordResp {
 }
 
 // Dex represents the dex gRPC service.
-service ApiDex {
+service Dex {
   // CreateClient creates a client.
   rpc CreateClient(CreateClientReq) returns (CreateClientResp) {};
   // UpdateClient updates an existing client

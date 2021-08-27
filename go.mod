@@ -7,6 +7,7 @@ require (
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.14.0
 	github.com/openshift/api v0.0.0-20210521075222-e273a339932a //Openshift 4.6
+	github.com/pkg/errors v0.9.1
 	google.golang.org/grpc v1.40.0
 	google.golang.org/protobuf v1.27.1
 	k8s.io/api v0.22.0
