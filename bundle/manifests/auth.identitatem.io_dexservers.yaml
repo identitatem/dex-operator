@@ -36,7 +36,7 @@ spec:
             properties:
               connectors:
                 items:
-                  description: ConnectorSepc defines the OIDC connector config details
+                  description: ConnectorSpec defines the OIDC connector config details
                   properties:
                     config:
                       description: ConfigSpec describes the client id and secret.
@@ -121,6 +121,9 @@ spec:
                     name:
                       type: string
                     type:
+                      enum:
+                      - github
+                      - ldap
                       type: string
                   type: object
                 type: array
