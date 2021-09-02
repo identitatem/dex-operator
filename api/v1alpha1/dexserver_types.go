@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -67,8 +68,8 @@ type Oauth2Spec struct {
 
 // ConfigSpec describes the client id and secret. The RedirectURI should be returned?
 type ConfigSpec struct {
-	ClientID        string `json:"clientID,omitempty"`
-	ClientSecretRef string `json:"clientSecretRef,omitempty"`
+	ClientID        string                 `json:"clientID,omitempty"`
+	ClientSecretRef corev1.ObjectReference `json:"clientSecretRef,omitempty"`
 	// TODO: confirm if we set this, or allow this to be passed in?
 	RedirectURI string `json:"redirectURI,omitempty"`
 	Org         string `json:"org,omitempty"`
