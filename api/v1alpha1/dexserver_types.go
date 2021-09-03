@@ -75,13 +75,24 @@ type ConfigSpec struct {
 	Org         string `json:"org,omitempty"`
 }
 
-// ConnectorSepc defines the OIDC connector config details
+// ConnectorSpec defines the OIDC connector config details
 type ConnectorSpec struct {
-	Name   string     `json:"name,omitempty"`
-	Type   string     `json:"type,omitempty"`
-	Id     string     `json:"id,omitempty"`
-	Config ConfigSpec `json:"config,omitempty"`
+	Name string `json:"name,omitempty"`
+	// +kubebuilder:validation:Enum=github;ldap
+	Type   ConnectorType `json:"type,omitempty"`
+	Id     string        `json:"id,omitempty"`
+	Config ConfigSpec    `json:"config,omitempty"`
 }
+
+type ConnectorType string
+
+const (
+	// ConnectorTypeGitHub enables Dex to use the GitHub OAuth2 flow to identify the end user through their GitHub account
+	ConnectorTypeGitHub ConnectorType = "github"
+
+	// ConnectorTypeLDAP enables Dex to allow email/password based authentication, backed by an LDAP directory
+	ConnectorTypeLDAP ConnectorType = "ldap"
+)
 
 // DexServerSpec defines the desired state of DexServer
 type DexServerSpec struct {
