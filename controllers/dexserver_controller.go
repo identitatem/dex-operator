@@ -111,7 +111,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{Requeue: true}, nil
 
 	case isNotDefinedConfigmap(dexServer, r, ctx):
-		spec := r.defineConfigMap(dexServer)
+		spec := r.defineConfigMap(dexServer, ctx)
 		log.Info("Creating a new ConfigMap", "ConfigMap.Namespace", spec.Namespace, "ConfigMap.Name", spec.Name)
 		if err := r.Create(ctx, spec); err != nil {
 			log.Info("failed to create configmap", "ConfigMap.Name", spec.Name)
@@ -227,6 +227,20 @@ func isNotDefinedConfigmap(m *authv1alpha1.DexServer, r *DexServerReconciler, ct
 		return true
 	}
 	return false
+}
+
+func getClientSecretFromRef(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) string {
+	var secretNamespace string
+	secretName := m.Spec.Connectors[0].Config.ClientSecretRef.Name
+	if secretNamespace = m.Spec.Connectors[0].Config.ClientSecretRef.Namespace; secretNamespace == "" {
+		secretNamespace = m.Namespace
+	}
+	resource := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
+		// TODO(cdoan): handle errors
+		return ""
+	}
+	return string(resource.Data["clientSecret"])
 }
 
 // Define the secret for grpc Mutual TLS. This secret is volume mounted on the dex instance pod. The client cert should be loaded by the gRPC client code.
@@ -443,17 +457,17 @@ func (r *DexServerReconciler) defineServiceGrpc(m *authv1alpha1.DexServer) *core
 	return resource
 }
 
-func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer) *corev1.ConfigMap {
+func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx context.Context) *corev1.ConfigMap {
 	// var configMapData = make(map[string]string)
 	// configMapData["config.yaml"] = dexconfigdata
 	labels := map[string]string{
 		"app": m.Name,
 	}
-	var Name, BaseDomain, clientID, clientSecret string
+	var Name, BaseDomain, clientID string
 	Name = "dex"
 	BaseDomain = "example.com"
 	clientID = "test-client-id-example"
-	clientSecret = "test-client-secret-example"
+	clientSecret := getClientSecretFromRef(m, r, ctx)
 	// if m.Spec.Connectors[0].Config.ClientID != "" {
 	// 	clientID = m.Spec.Connectors[0].Config.ClientID
 	// } else {
