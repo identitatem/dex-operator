@@ -463,11 +463,11 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 	labels := map[string]string{
 		"app": m.Name,
 	}
-	var Name, BaseDomain, clientID string
-	Name = "dex"
-	BaseDomain = "example.com"
-	clientID = "test-client-id-example"
 	clientSecret := getClientSecretFromRef(m, r, ctx)
+	datatype := m.Spec.Connectors[0].Type
+	dataid := m.Spec.Connectors[0].Id
+	dataname := m.Spec.Connectors[0].Name
+
 	// if m.Spec.Connectors[0].Config.ClientID != "" {
 	// 	clientID = m.Spec.Connectors[0].Config.ClientID
 	// } else {
@@ -485,7 +485,7 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 			Labels:    labels,
 		},
 		Data: map[string]string{"config.yaml": `
-issuer: https://` + Name + `.apps.` + BaseDomain + `
+issuer: ` + m.Spec.Issuer + `
 storage:
   type: kubernetes
   config:
@@ -501,13 +501,13 @@ grpc:
   tlsClientCA: /etc/dex/mtls/ca.crt
   reflection: true
 connectors:
-- type: github
-  id: github
-  name: GitHub
+- type: ` + datatype + `
+  id: ` + dataid + `
+  name: ` + dataname + `
   config:
-    clientID: ` + clientID + `
+    clientID: ` + m.Spec.Connectors[0].Config.ClientID + `
     clientSecret: ` + clientSecret + `
-    redirectURI: https://` + Name + `.apps.` + BaseDomain + `
+    redirectURI: ` + m.Spec.Connectors[0].Config.RedirectURI + `
     org: kubernetes
 oauth2:
   skipApprovalScreen: true
@@ -537,7 +537,10 @@ func (r *DexServerReconciler) defineRoute(m *authv1alpha1.DexServer) *routev1.Ro
 		Spec: routev1.RouteSpec{
 			// Host: routeHost,
 			TLS: &routev1.TLSConfig{
-				Termination: routev1.TLSTerminationPassthrough,
+				// Termination: routev1.TLSTerminationPassthrough,
+				// Termination: routev1.TLSTerminationEdge,
+				Termination:                   routev1.TLSTerminationReencrypt,
+				InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
 			},
 			To: routev1.RouteTargetReference{
 				Kind: "Service",

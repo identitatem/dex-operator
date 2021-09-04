@@ -21,12 +21,14 @@ sample-gitops:
 	oc apply -f ./config/samples/dexconfig-gitops.yaml
 
 
-.PHONY: check
-check:
+.PHONY: curl
+curl:
 	@echo ""
+	@curl -k https://$(shell oc get route -l app=dex2 -ojsonpath='{.items[].spec.host}')/.well-known/openid-configuration
+	@curl -k -I https://$(shell oc get route -l app=dex2 -ojsonpath='{.items[].spec.host}')/.well-known/openid-configuration
+	@curl https://$(shell oc get route -l app=dex2 -ojsonpath='{.items[].spec.host}')/.well-known/openid-configuration
 	@echo "Verify openid configuration"
-	@curl -k https://$(shell oc get route -l owner=dex-operator -ojsonpath='{.items[].spec.host}')/.well-known/openid-configuration
-	@curl -k -I https://$(shell oc get route -l owner=dex-operator -ojsonpath='{.items[].spec.host}')/.well-known/openid-configuration
+	@echo "curl https://$(shell oc get route -l app=dex2 -ojsonpath='{.items[].spec.host}')/.well-known/openid-configuration"
 
 .PHONY: cleanup
 cleanup:
