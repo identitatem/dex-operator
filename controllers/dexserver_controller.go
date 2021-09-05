@@ -463,21 +463,16 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 	labels := map[string]string{
 		"app": m.Name,
 	}
-	var Name, BaseDomain, clientID string
+	var Name, BaseDomain string
 	Name = "dex"
 	BaseDomain = "example.com"
-	clientID = "test-client-id-example"
 	clientSecret := getClientSecretFromRef(m, r, ctx)
-	// if m.Spec.Connectors[0].Config.ClientID != "" {
-	// 	clientID = m.Spec.Connectors[0].Config.ClientID
-	// } else {
-	// 	clientID = "test-data-clientid"
-	// }
-	// if m.Spec.Connectors[0].Config.ClientSecret != "" {
-	// 	clientSecret = m.Spec.Connectors[0].Config.ClientSecret
-	// } else {
-	// 	clientSecret = "test-data-clientsecret"
-	// }
+
+	configIssuer := m.Spec.Issuer
+	configClientID := m.Spec.Connectors[0].Config.ClientID
+	configConnectorType := string(m.Spec.Connectors[0].Type)
+	configConnectorName := m.Spec.Connectors[0].Name
+
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.Name,
@@ -485,7 +480,7 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 			Labels:    labels,
 		},
 		Data: map[string]string{"config.yaml": `
-issuer: https://` + Name + `.apps.` + BaseDomain + `
+issuer: ` + configIssuer + `
 storage:
   type: kubernetes
   config:
@@ -501,11 +496,11 @@ grpc:
   tlsClientCA: /etc/dex/mtls/ca.crt
   reflection: true
 connectors:
-- type: github
+- type: ` + configConnectorType + `
   id: github
-  name: GitHub
+  name: ` + configConnectorName + `
   config:
-    clientID: ` + clientID + `
+    clientID: ` + configClientID + `
     clientSecret: ` + clientSecret + `
     redirectURI: https://` + Name + `.apps.` + BaseDomain + `
     org: kubernetes

@@ -75,12 +75,14 @@ type ConfigSpec struct {
 	Org         string `json:"org,omitempty"`
 }
 
+type ConnectorType string
+
 // ConnectorSepc defines the OIDC connector config details
 type ConnectorSpec struct {
-	Name   string     `json:"name,omitempty"`
-	Type   string     `json:"type,omitempty"`
-	Id     string     `json:"id,omitempty"`
-	Config ConfigSpec `json:"config,omitempty"`
+	Name   string        `json:"name,omitempty"`
+	Type   ConnectorType `json:"type,omitempty"`
+	Id     string        `json:"id,omitempty"`
+	Config ConfigSpec    `json:"config,omitempty"`
 }
 
 // DexServerSpec defines the desired state of DexServer
