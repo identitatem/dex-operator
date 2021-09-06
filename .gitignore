@@ -8,6 +8,8 @@
 bin
 testbin/*
 .history/*
+***/.history
+hack/demo*.yaml
 
 # Test binary, build with `go test -c`
 *.test

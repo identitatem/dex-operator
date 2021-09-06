@@ -463,21 +463,18 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 	labels := map[string]string{
 		"app": m.Name,
 	}
-	var Name, BaseDomain, clientID string
-	Name = "dex"
-	BaseDomain = "example.com"
-	clientID = "test-client-id-example"
 	clientSecret := getClientSecretFromRef(m, r, ctx)
-	// if m.Spec.Connectors[0].Config.ClientID != "" {
-	// 	clientID = m.Spec.Connectors[0].Config.ClientID
-	// } else {
-	// 	clientID = "test-data-clientid"
-	// }
-	// if m.Spec.Connectors[0].Config.ClientSecret != "" {
-	// 	clientSecret = m.Spec.Connectors[0].Config.ClientSecret
-	// } else {
-	// 	clientSecret = "test-data-clientsecret"
-	// }
+
+	var connectorType string
+	switch m.Spec.Connectors[0].Type {
+	case authv1alpha1.ConnectorTypeGitHub:
+		connectorType = string(authv1alpha1.ConnectorTypeGitHub)
+	case authv1alpha1.ConnectorTypeLDAP:
+		connectorType = string(authv1alpha1.ConnectorTypeLDAP)
+	default:
+		connectorType = string(authv1alpha1.ConnectorTypeGitHub)
+	}
+
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.Name,
@@ -485,7 +482,7 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 			Labels:    labels,
 		},
 		Data: map[string]string{"config.yaml": `
-issuer: https://` + Name + `.apps.` + BaseDomain + `
+issuer: ` + m.Spec.Issuer + `
 storage:
   type: kubernetes
   config:
@@ -501,13 +498,13 @@ grpc:
   tlsClientCA: /etc/dex/mtls/ca.crt
   reflection: true
 connectors:
-- type: github
-  id: github
-  name: GitHub
+- type: ` + connectorType + `
+  id: ` + m.Spec.Connectors[0].Id + `
+  name: ` + m.Spec.Connectors[0].Name + `
   config:
-    clientID: ` + clientID + `
+    clientID: ` + m.Spec.Connectors[0].Config.ClientID + `
     clientSecret: ` + clientSecret + `
-    redirectURI: https://` + Name + `.apps.` + BaseDomain + `
+    redirectURI: ` + m.Spec.Connectors[0].Config.RedirectURI + `
     org: kubernetes
 oauth2:
   skipApprovalScreen: true
@@ -537,7 +534,10 @@ func (r *DexServerReconciler) defineRoute(m *authv1alpha1.DexServer) *routev1.Ro
 		Spec: routev1.RouteSpec{
 			// Host: routeHost,
 			TLS: &routev1.TLSConfig{
-				Termination: routev1.TLSTerminationPassthrough,
+				// Termination: routev1.TLSTerminationPassthrough,
+				// Termination: routev1.TLSTerminationEdge,
+				Termination:                   routev1.TLSTerminationReencrypt,
+				InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
 			},
 			To: routev1.RouteTargetReference{
 				Kind: "Service",
