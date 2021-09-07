@@ -10,6 +10,15 @@ export CLIENT_SECRET=${CLIENT_SECRET:-"thing123456"}
 export CLIENT_SECRET_NAME=cluster1-clientsecret
 
 cat > demo-dexserver-${NAME}-${NS}.yaml <<EOF
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${NAME}-client-secret
+type: Opaque
+stringData:
+  clientSecret: ${GITHUB_APP_CLIENTSECRET}
+---
 apiVersion: auth.identitatem.io/v1alpha1
 kind: DexServer
 metadata:
@@ -59,16 +68,6 @@ spec:
       redirectURI: "https://${NAME}-${NS}.${APPS}/callback"
 EOF
 
-cat > demo-${NAME}-client-secret.yaml <<EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${NAME}-client-secret
-type: Opaque
-stringData:
-  clientSecret: ${GITHUB_APP_CLIENTSECRET}
-EOF
-
 cat > demo-dexclient-hub.yaml <<EOF
 apiVersion: auth.identitatem.io/v1alpha1
 kind: DexClient
@@ -79,9 +78,12 @@ spec:
   clientSecret: ${CLIENT_SECRET}
   redirectURIs:
   - "https://oauth-openshift.${APPS}/oauth2callback/${CLIENT_NAME}"
+  public: false
 EOF
 
-oc create secret generic ${CLIENT_SECRET_NAME} --from-literal=clientSecret=${CLIENT_SECRET} -n openshift-config --dry-run -o yaml > demo-${CLIENT_SECRET_NAME}.yaml
+oc create secret generic ${CLIENT_SECRET_NAME} \
+--from-literal=clientSecret=${CLIENT_SECRET} \
+-n openshift-config --dry-run -o yaml > demo-${CLIENT_SECRET_NAME}.yaml
 
 cat > demo-oauth.yaml <<EOF
 apiVersion: config.openshift.io/v1
