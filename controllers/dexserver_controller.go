@@ -515,7 +515,7 @@ type DexConfigYamlSpec struct {
 	Connectors       []DexConnectorSpec     `yaml:"connectors,omitempty"`
 	Oauth2           DexOauth2Spec          `yaml:"oauth2,omitempty"`
 	StaticClents     []DexStaticClientsSpec `yaml:"staticClients,omitempty"`
-	EnablePasswordDB bool                   `yaml:"enablePasswordDBv,omitempty"`
+	EnablePasswordDB bool                   `yaml:"enablePasswordDB,omitempty"`
 }
 
 func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx context.Context) *corev1.ConfigMap {
@@ -581,14 +581,15 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 		configYamlData.Connectors = append(configYamlData.Connectors, newConnector)
 	}
 
+	// The following code can be uncommented if we need to use StaticClients
 	// Define StaticClients
-	newStaticClient := DexStaticClientsSpec{
-		Id:           "example-app",
-		RedirectURIs: []string{"http://127.0.0.1:5555/callback"},
-		Name:         "Example App",
-		Secret:       "another-client-secret",
-	}
-	configYamlData.StaticClents = append(configYamlData.StaticClents, newStaticClient)
+	// newStaticClient := DexStaticClientsSpec{
+	// 	Id:           "example-app",
+	// 	RedirectURIs: []string{"http://127.0.0.1:5555/callback"},
+	// 	Name:         "Example App",
+	// 	Secret:       "another-client-secret",
+	// }
+	// configYamlData.StaticClents = append(configYamlData.StaticClents, newStaticClient)
 
 	// Get yaml representation of configYamlData
 	configYaml, err := yaml.Marshal(&configYamlData)
