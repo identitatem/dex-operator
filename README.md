@@ -2,6 +2,8 @@
 
 This is a operator-sdk based operator to deploy and manage a Dex server instance.
 
+ ![component diagram](/docs/img/dex-component-diagram.png)
+
 # Usage
 
 ## Option 1: Building your own image and bundle
@@ -48,7 +50,7 @@ This is a operator-sdk based operator to deploy and manage a Dex server instance
     quay-io-cdoan-dex-operator-bundle-v0-0-5                          1/1     Running     0          35s
     ```
 
-3. if you have not done so already, generate or collect the github oauth information and set the appropriate environment variables. An example of a github app will have these values:
+3. if you have not done so already, generate or collect the github oauth application information and set the appropriate environment variables. An example of a github app will have these values like this to reference the dex service :
 
     | key | value |
     |-----|-------|
