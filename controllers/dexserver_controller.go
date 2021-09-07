@@ -482,6 +482,8 @@ type DexGrpcSpec struct {
 	Reflection  bool   `yaml:"reflection,omitempty"`
 }
 
+// The DexConnectorConfigSpec is specific to the Github connector as of now 
+// TODO: Add config properties for ldap
 type DexConnectorConfigSpec struct {
 	ClientID     string `yaml:"clientID,omitempty"`
 	ClientSecret string `yaml:"clientSecret,omitempty"`
@@ -520,8 +522,7 @@ type DexConfigYamlSpec struct {
 
 func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx context.Context) *corev1.ConfigMap {
 	log := ctrllog.FromContext(ctx)
-	// var configMapData = make(map[string]string)
-	// configMapData["config.yaml"] = dexconfigdata
+
 	labels := map[string]string{
 		"app": m.Name,
 	}
@@ -571,7 +572,7 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 			Type: connectorType,
 			Id:   connector.Id,
 			Name: connector.Name,
-			Config: DexConnectorConfigSpec{
+			Config: DexConnectorConfigSpec{	// This definition is specific to the Github connector (the ldap configuration has different attributes for config)
 				ClientID:     connector.Config.ClientID,
 				ClientSecret: clientSecret,
 				RedirectURI:  connector.Config.RedirectURI,
