@@ -590,7 +590,7 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 	}
 	configYamlData.StaticClents = append(configYamlData.StaticClents, newStaticClient)
 
-	// Get string representation of the dex config.yaml
+	// Get yaml representation of configYamlData
 	configYaml, err := yaml.Marshal(&configYamlData)
 
 	if err != nil {
