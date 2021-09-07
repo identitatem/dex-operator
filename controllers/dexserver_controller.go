@@ -460,62 +460,62 @@ func (r *DexServerReconciler) defineServiceGrpc(m *authv1alpha1.DexServer) *core
 
 // Definition of types needed to construct the config map used by the Dex application
 type DexStorageConfigSpec struct {
-	InCluster      bool   `yaml:"inCluster,omitempty"`
+	InCluster bool `yaml:"inCluster,omitempty"`
 }
 
 type DexStorageSpec struct {
-	Type 		string					`yaml:"type,omitempty"`
-	Config      DexStorageConfigSpec  	`yaml:"config,omitempty"`
+	Type   string               `yaml:"type,omitempty"`
+	Config DexStorageConfigSpec `yaml:"config,omitempty"`
 }
 
 type DexWebSpec struct {
 	Http    string `yaml:"http,omitempty"`
 	Https   string `yaml:"https,omitempty"`
 	TlsCert string `yaml:"tlsCert,omitempty"`
-	TlsKey  string `yaml:"tlsKey,omitempty"`	
+	TlsKey  string `yaml:"tlsKey,omitempty"`
 }
 type DexGrpcSpec struct {
-	Addr        string 	`yaml:"addr,omitempty"`
-	TlsCert     string 	`yaml:"tlsCert,omitempty"`
-	TlsKey      string 	`yaml:"tlsKey,omitempty"`
-	TlsClientCA string 	`yaml:"tlsClientCA,omitempty"`
-	Reflection 	bool 	`yaml:"reflection,omitempty"`
+	Addr        string `yaml:"addr,omitempty"`
+	TlsCert     string `yaml:"tlsCert,omitempty"`
+	TlsKey      string `yaml:"tlsKey,omitempty"`
+	TlsClientCA string `yaml:"tlsClientCA,omitempty"`
+	Reflection  bool   `yaml:"reflection,omitempty"`
 }
 
 type DexConnectorConfigSpec struct {
-	ClientID        string      `yaml:"clientID,omitempty"`
-	ClientSecret	string		`yaml:"clientSecret,omitempty"`
-	RedirectURI		string 		`yaml:"redirectURI,omitempty"`
-	Org         	string		`yaml:"org,omitempty"`
+	ClientID     string `yaml:"clientID,omitempty"`
+	ClientSecret string `yaml:"clientSecret,omitempty"`
+	RedirectURI  string `yaml:"redirectURI,omitempty"`
+	Org          string `yaml:"org,omitempty"`
 }
 
 type DexConnectorSpec struct {
 	// +kubebuilder:validation:Enum=github;ldap
-	Type   	string					`yaml:"type,omitempty"`
-	Id     	string        			`yaml:"id,omitempty"`
-	Name	string 					`yaml:"name,omitempty"`	
-	Config 	DexConnectorConfigSpec	`yaml:"config,omitempty"`
+	Type   string                 `yaml:"type,omitempty"`
+	Id     string                 `yaml:"id,omitempty"`
+	Name   string                 `yaml:"name,omitempty"`
+	Config DexConnectorConfigSpec `yaml:"config,omitempty"`
 }
 
 type DexOauth2Spec struct {
-	SkipApprovalScreen    bool     `yaml:"skipApprovalScreen,omitempty"`
+	SkipApprovalScreen bool `yaml:"skipApprovalScreen,omitempty"`
 }
 type DexStaticClientsSpec struct {
-	Id     			string		`yaml:"id,omitempty"`
-	RedirectURIs 	[]string	`yaml:"redirectURIs,omitempty"`
-	Name     		string      `yaml:"name,omitempty"`
-	Secret     		string      `yaml:"secret,omitempty"`
+	Id           string   `yaml:"id,omitempty"`
+	RedirectURIs []string `yaml:"redirectURIs,omitempty"`
+	Name         string   `yaml:"name,omitempty"`
+	Secret       string   `yaml:"secret,omitempty"`
 }
 
 type DexConfigYamlSpec struct {
-	Issuer 				string					`yaml:"issuer,omitempty"`
-	Storage 			DexStorageSpec			`yaml:"storage,omitempty"`
-	Web					DexWebSpec 				`yaml:"web,omitempty"`
-	Grpc				DexGrpcSpec				`yaml:"grpc,omitempty"`
-	Connectors			[]DexConnectorSpec    	`yaml:"connectors,omitempty"`
-	Oauth2          	DexOauth2Spec         	`yaml:"oauth2,omitempty"`
-	StaticClents		[]DexStaticClientsSpec	`yaml:"staticClients,omitempty"`
-	EnablePasswordDB	bool                 	`yaml:"enablePasswordDBv,omitempty"`
+	Issuer           string                 `yaml:"issuer,omitempty"`
+	Storage          DexStorageSpec         `yaml:"storage,omitempty"`
+	Web              DexWebSpec             `yaml:"web,omitempty"`
+	Grpc             DexGrpcSpec            `yaml:"grpc,omitempty"`
+	Connectors       []DexConnectorSpec     `yaml:"connectors,omitempty"`
+	Oauth2           DexOauth2Spec          `yaml:"oauth2,omitempty"`
+	StaticClents     []DexStaticClientsSpec `yaml:"staticClients,omitempty"`
+	EnablePasswordDB bool                   `yaml:"enablePasswordDBv,omitempty"`
 }
 
 func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx context.Context) *corev1.ConfigMap {
@@ -528,34 +528,34 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 	clientSecret := getClientSecretFromRef(m, r, ctx)
 
 	// Define config yaml data for Dex
-	configYamlData := DexConfigYamlSpec {
+	configYamlData := DexConfigYamlSpec{
 		Issuer: m.Spec.Issuer,
-		Storage: DexStorageSpec {
+		Storage: DexStorageSpec{
 			Type: "kubernetes",
-			Config: DexStorageConfigSpec {
+			Config: DexStorageConfigSpec{
 				InCluster: true,
 			},
 		},
 		Web: DexWebSpec{
-			Https: "0.0.0.0:5556",
+			Https:   "0.0.0.0:5556",
 			TlsCert: "/etc/dex/tls/tls.crt",
-			TlsKey: "/etc/dex/tls/tls.key",		
+			TlsKey:  "/etc/dex/tls/tls.key",
 		},
-		Grpc: DexGrpcSpec {
-			Addr: "0.0.0.0:5557",
-			TlsCert: "/etc/dex/mtls/tls.crt",
-			TlsKey: "/etc/dex/mtls/tls.key",
+		Grpc: DexGrpcSpec{
+			Addr:        "0.0.0.0:5557",
+			TlsCert:     "/etc/dex/mtls/tls.crt",
+			TlsKey:      "/etc/dex/mtls/tls.key",
 			TlsClientCA: "/etc/dex/mtls/ca.crt",
-			Reflection: true,	
+			Reflection:  true,
 		},
-		Oauth2: DexOauth2Spec {
+		Oauth2: DexOauth2Spec{
 			SkipApprovalScreen: true,
 		},
 		EnablePasswordDB: true,
 	}
 
-	// Loop through connectors defined in the Server CR to create the dex configuration for connectors
-    for _, connector := range m.Spec.Connectors {
+	// Iterate over connectors defined in the DexServer to create the dex configuration for connectors
+	for _, connector := range m.Spec.Connectors {
 		// Determine the connector type
 		var connectorType string
 		switch connector.Type {
@@ -566,35 +566,36 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 		default:
 			connectorType = string(authv1alpha1.ConnectorTypeGitHub)
 		}
-				
-		newConnector := DexConnectorSpec {
+
+		newConnector := DexConnectorSpec{
 			Type: connectorType,
-			Id: connector.Id,
+			Id:   connector.Id,
 			Name: connector.Name,
 			Config: DexConnectorConfigSpec{
-				ClientID: connector.Config.ClientID,
+				ClientID:     connector.Config.ClientID,
 				ClientSecret: clientSecret,
-				RedirectURI: connector.Config.RedirectURI,
-				Org: "kubernetes",
+				RedirectURI:  connector.Config.RedirectURI,
+				Org:          "kubernetes",
 			},
 		}
 		configYamlData.Connectors = append(configYamlData.Connectors, newConnector)
-    }
+	}
 
 	// Define StaticClients
-	newStaticClient := DexStaticClientsSpec {
-		Id: "example-app",
+	newStaticClient := DexStaticClientsSpec{
+		Id:           "example-app",
 		RedirectURIs: []string{"http://127.0.0.1:5555/callback"},
-		Name: "Example App",
-		Secret: "another-client-secret",
+		Name:         "Example App",
+		Secret:       "another-client-secret",
 	}
 	configYamlData.StaticClents = append(configYamlData.StaticClents, newStaticClient)
 
 	// Get string representation of the dex config.yaml
 	configYaml, err := yaml.Marshal(&configYamlData)
-	// TODO - handle yaml err	
+
 	if err != nil {
 		log.Info("Error! failed to marshal dex config.yaml")
+		return nil
 	}
 
 	cm := &corev1.ConfigMap{
