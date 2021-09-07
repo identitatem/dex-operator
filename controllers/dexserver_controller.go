@@ -519,6 +519,7 @@ type DexConfigYamlSpec struct {
 }
 
 func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx context.Context) *corev1.ConfigMap {
+	log := ctrllog.FromContext(ctx)
 	// var configMapData = make(map[string]string)
 	// configMapData["config.yaml"] = dexconfigdata
 	labels := map[string]string{
@@ -590,8 +591,11 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 	configYamlData.StaticClents = append(configYamlData.StaticClents, newStaticClient)
 
 	// Get string representation of the dex config.yaml
-	configYaml, _ := yaml.Marshal(&configYamlData)
+	configYaml, err := yaml.Marshal(&configYamlData)
 	// TODO - handle yaml err	
+	if err != nil {
+		log.Info("Error! failed to marshal dex config.yaml")
+	}
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
