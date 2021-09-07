@@ -102,7 +102,7 @@ func NewClient(opts *Options) (*APIClient, error) {
 	}
 	creds := credentials.NewTLS(clientTLSConfig)
 
-	conn, err := grpc.Dial(opts.HostAndPort, grpc.WithTransportCredentials(creds))
+	conn, err := grpc.Dial(opts.HostAndPort, grpc.WithTransportCredentials(creds), grpc.WithBlock())
 	if err != nil {
 		return nil, errors.Wrapf(err, "opening the gRPC connection with server %q", opts.HostAndPort)
 	}
