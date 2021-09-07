@@ -474,6 +474,7 @@ type DexWebSpec struct {
 	TlsCert string `yaml:"tlsCert,omitempty"`
 	TlsKey  string `yaml:"tlsKey,omitempty"`
 }
+
 type DexGrpcSpec struct {
 	Addr        string `yaml:"addr,omitempty"`
 	TlsCert     string `yaml:"tlsCert,omitempty"`
@@ -502,6 +503,7 @@ type DexConnectorSpec struct {
 type DexOauth2Spec struct {
 	SkipApprovalScreen bool `yaml:"skipApprovalScreen,omitempty"`
 }
+
 type DexStaticClientsSpec struct {
 	Id           string   `yaml:"id,omitempty"`
 	RedirectURIs []string `yaml:"redirectURIs,omitempty"`
