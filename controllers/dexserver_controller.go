@@ -190,11 +190,13 @@ func isNotDefinedServiceAccount(m *authv1alpha1.DexServer, r *DexServerReconcile
 	resource := &corev1.ServiceAccount{}
 	// if err := r.Get(ctx, types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
 	if err := r.Get(ctx, types.NamespacedName{Name: SERVICE_ACCOUNT_NAME, Namespace: m.Namespace}, resource); err != nil {
-		if errors.IsNotFound(err) {
-			return true
-		} else {
-			return true
-		}
+		// Sonarcloud does not like both branches returning true
+		//		if errors.IsNotFound(err) {
+		//			return true
+		//		} else {
+		//			return true
+		///		}
+		return true
 	}
 	return false
 }
@@ -483,7 +485,7 @@ type DexGrpcSpec struct {
 	Reflection  bool   `yaml:"reflection,omitempty"`
 }
 
-// The DexConnectorConfigSpec is specific to the Github connector as of now 
+// The DexConnectorConfigSpec is specific to the Github connector as of now
 // TODO: Add config properties for ldap
 type DexConnectorConfigSpec struct {
 	ClientID     string `yaml:"clientID,omitempty"`
@@ -574,7 +576,7 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 			Type: connectorType,
 			Id:   connector.Id,
 			Name: connector.Name,
-			Config: DexConnectorConfigSpec{	// This definition is specific to the Github connector (the ldap configuration has different attributes for config)
+			Config: DexConnectorConfigSpec{ // This definition is specific to the Github connector (the ldap configuration has different attributes for config)
 				ClientID:     connector.Config.ClientID,
 				ClientSecret: clientSecret,
 				RedirectURI:  connector.Config.RedirectURI,
