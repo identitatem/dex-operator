@@ -94,7 +94,8 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			"Public", dexv1Client.Spec.Public,
 			"ClientID", dexv1Client.Spec.ClientID,
 			"LogoURL", dexv1Client.Spec.LogoURL,
-			"clientSecret", dexv1Client.Spec.ClientSecret)
+			"clientSecret", "REDACTED")
+		//"clientSecret", dexv1Client.Spec.ClientSecret)
 
 		// Implement dex auth client creation here
 		res, err := r.DexApiClient.CreateClient(
