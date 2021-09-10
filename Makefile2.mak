@@ -1,5 +1,15 @@
+DEX_IMAGE ?= "quay.io/dexidp/dex:v2.28.1"
+
+.PHONY: dex-image
+dex-image:
+	@echo ""
+	@echo "Using DEX_IMAGE: $(DEX_IMAGE)"
+	perl -pi -e "s#quay.io/dexidp/dex:v2.28.1#${DEX_IMAGE}#g" config/manager/manager.yaml
+
+
 .PHONY: bits
-bits: build manifests docker-build docker-push bundle bundle-build bundle-push
+bits: build dex-image manifests docker-build docker-push bundle bundle-build bundle-push
+
 
 .PHONY: sdk-run
 sdk-run:

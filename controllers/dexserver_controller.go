@@ -45,7 +45,6 @@ const (
 	SERVICE_ACCOUNT_NAME  = "dex-operator-dexsso"
 	GRPC_SERVICE_NAME     = "dex"
 	DEX_IMAGE_ENV_NAME    = "RELATED_IMAGE_DEX"
-	DEX_IMAGE_DEFAULT     = "quay.io/dexidp/dex:v2.28.1"
 )
 
 var (
@@ -147,7 +146,11 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{Requeue: true}, nil
 
 	case isNotDefinedDeployment(dexServer, r, ctx):
-		spec := r.defineDeployment(dexServer)
+		spec, err := r.defineDeployment(dexServer)
+		if err != nil {
+			log.Info("Error creating deployment definition", err)
+			return ctrl.Result{}, err
+		}
 		log.Info("Creating a new Deployment", "Deployment.Namespace", spec.Namespace, "Deployment.Name", spec.Name)
 		if err := r.Create(ctx, spec); err != nil {
 			log.Info("failed to create deployment", "Deployment.Name", spec.Name)
@@ -285,17 +288,21 @@ func (r *DexServerReconciler) defineServiceAccount(m *authv1alpha1.DexServer) *c
 	return serviceAccountSpec
 }
 
-func getDexIimagePullSpec() string {
+func getDexImagePullSpec() (string, error) {
 	imageName := os.Getenv(DEX_IMAGE_ENV_NAME)
 	if len(imageName) == 0 {
-		return DEX_IMAGE_DEFAULT
+		return "", fmt.Errorf("Required environment variable %v is empty or not set", DEX_IMAGE_ENV_NAME)
 	}
-	return imageName
+	return imageName, nil
 }
 
 // Defines the dex instance (dex server).
-func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv1.Deployment {
+func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) (*appsv1.Deployment, error) {
 	ls := labelsForDexServer(m.Name, m.Namespace)
+	dexImage, err := getDexImagePullSpec()
+	if err != nil {
+		return nil, err
+	}
 	// replicas := m.Spec.Size
 	var replicas int32 = 1
 
@@ -320,7 +327,7 @@ func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv
 							"serve",
 							"/etc/dex/cfg/config.yaml",
 						},
-						Image:           getDexIimagePullSpec(),
+						Image:           dexImage,
 						ImagePullPolicy: corev1.PullAlways,
 						Name:            m.Name,
 						Env: []corev1.EnvVar{
@@ -403,7 +410,7 @@ func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv
 	dep.Spec.Template.Spec.ServiceAccountName = SERVICE_ACCOUNT_NAME
 
 	ctrl.SetControllerReference(m, dep, r.Scheme)
-	return dep
+	return dep, nil
 }
 
 func (r *DexServerReconciler) defineService(m *authv1alpha1.DexServer) *corev1.Service {
