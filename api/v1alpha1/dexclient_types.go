@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -28,10 +29,9 @@ type DexClientSpec struct {
 	// +kubebuilder:validation:MinLength=4
 	// The name of the oidc config
 	ClientID string `json:"clientID,omitempty"`
-	// +kubebuilder:validation:MinLength=2
 	// +kubebuilder:validation:Required
 	// The shared oidc secret
-	ClientSecret string `json:"clientSecret,omitempty"`
+	ClientSecretRef corev1.SecretReference `json:"clientSecretRef,omitempty"`
 	// +optional
 	// Sets the public flag
 	Public bool `json:"public,omitempty"`

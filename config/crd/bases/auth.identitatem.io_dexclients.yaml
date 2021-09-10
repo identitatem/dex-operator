@@ -40,10 +40,18 @@ spec:
                 description: The name of the oidc config
                 minLength: 4
                 type: string
-              clientSecret:
+              clientSecretRef:
                 description: The shared oidc secret
-                minLength: 2
-                type: string
+                properties:
+                  name:
+                    description: Name is unique within a namespace to reference a
+                      secret resource.
+                    type: string
+                  namespace:
+                    description: Namespace defines the space within which the secret
+                      name must be unique.
+                    type: string
+                type: object
               logoURL:
                 description: LogoURL
                 type: string

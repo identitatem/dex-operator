@@ -2,22 +2,32 @@
 
 export NAME=${NAME:-"dex2"}
 export NS=${NS:-"dex-operator"}
+export SECRET_NS=${SECRET_NS:-"dex-operator"}
+
 export APPS=$(oc get infrastructure cluster -ojsonpath='{.status.apiServerURL}' | cut -d':' -f2 | sed 's/\/\/api/apps/g')
-export GITHUB_APP_CLIENTID=${GITHUB_APP_CLIENTID:-"githubappclientid"}
-export GITHUB_APP_CLIENTSECRET=${GITHUB_APP_CLIENTSECRET:-"githubappclientsecret"}
-export CLIENT_NAME=${CLIENT_NAME:-"thing"}
-export CLIENT_SECRET=${CLIENT_SECRET:-"thing123456"}
-export CLIENT_SECRET_NAME=cluster1-clientsecret
+export OAUTH_CLIENT_SECRET_NAME=cluster1-clientsecret
+
+export DEXSERVER_CLIENT_NAME=${NAME}
+export DEXSERVER_CLIENT_SECRET_NAME=${NAME}-dexserver-client-secret
+export DEXSERVER_CLIENT_ID=${DEXSERVER_CLIENT_ID:-"dexserverclientid"}
+export DEXSERVER_CLIENT_SECRET=${DEXSERVER_CLIENT_SECRET:-"dexserversecret123456"}
+
+export DEXCLIENT_NAME=dexclient-cluster2
+export DEXCLIENT_SECRET_NAME=dexclient-client-secret
+export DEXCLIENT_ID=dexclientcluster2clientid
+export DEXCLIENT_SECRET=dexclientsecret123456
+
 
 cat > demo-dexserver-${NAME}-${NS}.yaml <<EOF
 ---
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ${NAME}-client-secret
+  name: ${DEXSERVER_CLIENT_SECRET_NAME}
+  namespace: ${SECRET_NS}
 type: Opaque
 stringData:
-  clientSecret: ${GITHUB_APP_CLIENTSECRET}
+  clientSecret: ${DEXSERVER_CLIENT_SECRET}
 ---
 apiVersion: auth.identitatem.io/v1alpha1
 kind: DexServer
@@ -62,30 +72,43 @@ spec:
     id: github
     name: github
     config:
-      clientID: "${GITHUB_APP_CLIENTID}"
+      clientID: "${DEXSERVER_CLIENT_ID}"
       clientSecretRef:
-        name: ${NAME}-client-secret
+        name: ${DEXSERVER_CLIENT_SECRET_NAME}
+        namespace: ${NS}
       redirectURI: "https://${NAME}-${NS}.${APPS}/callback"
 EOF
 
-cat > demo-dexclient-hub.yaml <<EOF
+# DEX CLIENT
+
+oc create secret generic ${DEXCLIENT_SECRET_NAME} \
+--from-literal=clientSecret=${DEXCLIENT_SECRET} \
+-n ${SECRET_NS} --dry-run -o yaml > demo-dexclient-${DEXCLIENT_NAME}.yaml
+
+cat >> demo-dexclient-${DEXCLIENT_NAME}.yaml <<EOF
+---
 apiVersion: auth.identitatem.io/v1alpha1
 kind: DexClient
 metadata:
-  name: ${CLIENT_NAME}
+  name: ${DEXCLIENT_NAME}
 spec:
-  clientID: ${CLIENT_NAME}
-  clientSecret: ${CLIENT_SECRET}
+  clientID: ${DEXCLIENT_ID}
+  clientSecretRef:
+    name: ${DEXCLIENT_SECRET_NAME}
+    namespace: ${SECRET_NS}
   redirectURIs:
-  - "https://oauth-openshift.${APPS}/oauth2callback/${CLIENT_NAME}"
+  - "https://oauth-openshift.${APPS}/oauth2callback/${DEXCLIENT_NAME}"
   public: false
 EOF
 
-oc create secret generic ${CLIENT_SECRET_NAME} \
---from-literal=clientSecret=${CLIENT_SECRET} \
--n openshift-config --dry-run -o yaml > demo-${CLIENT_SECRET_NAME}.yaml
+# OAUTH MANIFESTS
 
-cat > demo-oauth.yaml <<EOF
+oc create secret generic ${OAUTH_CLIENT_SECRET_NAME} \
+--from-literal=clientSecret=${DEXCLIENT_SECRET} \
+-n openshift-config --dry-run -o yaml > demo-oauth.yaml
+
+cat >> demo-oauth.yaml <<EOF
+---
 apiVersion: config.openshift.io/v1
 kind: OAuth
 metadata:
@@ -98,7 +121,7 @@ metadata:
 spec:
   identityProviders:
     - mappingMethod: claim
-      name: ${CLIENT_NAME}
+      name: ${DEXCLIENT_NAME}
       openID:
         claims:
           email:
@@ -109,9 +132,9 @@ spec:
             - preferred_username
             - email
             - name
-        clientID: ${CLIENT_NAME}
+        clientID: ${DEXCLIENT_ID}
         clientSecret:
-          name: cluster1-clientsecret
+          name: ${OAUTH_CLIENT_SECRET_NAME}
         extraAuthorizeParameters:
           include_granted_scopes: 'true'
         extraScopes:
