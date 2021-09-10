@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 
 	routev1 "github.com/openshift/api/route/v1"
 	"gopkg.in/yaml.v2"
@@ -43,7 +44,8 @@ const (
 	SECRET_WEB_TLS_SUFFIX = "-tls-secret"
 	SERVICE_ACCOUNT_NAME  = "dex-operator-dexsso"
 	GRPC_SERVICE_NAME     = "dex"
-	DEX_IMAGE             = "quay.io/dexidp/dex:v2.28.1"
+	DEX_IMAGE_ENV_NAME    = "RELATED_IMAGE_DEX"
+	DEX_IMAGE_DEFAULT     = "quay.io/dexidp/dex:v2.28.1"
 )
 
 var (
@@ -283,6 +285,14 @@ func (r *DexServerReconciler) defineServiceAccount(m *authv1alpha1.DexServer) *c
 	return serviceAccountSpec
 }
 
+func getDexIimagePullSpec() string {
+	imageName := os.Getenv(DEX_IMAGE_ENV_NAME)
+	if len(imageName) == 0 {
+		return DEX_IMAGE_DEFAULT
+	}
+	return imageName
+}
+
 // Defines the dex instance (dex server).
 func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv1.Deployment {
 	ls := labelsForDexServer(m.Name, m.Namespace)
@@ -310,7 +320,7 @@ func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv
 							"serve",
 							"/etc/dex/cfg/config.yaml",
 						},
-						Image:           DEX_IMAGE,
+						Image:           getDexIimagePullSpec(),
 						ImagePullPolicy: corev1.PullAlways,
 						Name:            m.Name,
 						Env: []corev1.EnvVar{
@@ -483,7 +493,7 @@ type DexGrpcSpec struct {
 	Reflection  bool   `yaml:"reflection,omitempty"`
 }
 
-// The DexConnectorConfigSpec is specific to the Github connector as of now 
+// The DexConnectorConfigSpec is specific to the Github connector as of now
 // TODO: Add config properties for ldap
 type DexConnectorConfigSpec struct {
 	ClientID     string `yaml:"clientID,omitempty"`
@@ -574,7 +584,7 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 			Type: connectorType,
 			Id:   connector.Id,
 			Name: connector.Name,
-			Config: DexConnectorConfigSpec{	// This definition is specific to the Github connector (the ldap configuration has different attributes for config)
+			Config: DexConnectorConfigSpec{ // This definition is specific to the Github connector (the ldap configuration has different attributes for config)
 				ClientID:     connector.Config.ClientID,
 				ClientSecret: clientSecret,
 				RedirectURI:  connector.Config.RedirectURI,

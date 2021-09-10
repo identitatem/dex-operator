@@ -31,6 +31,9 @@ spec:
         - --leader-elect
         image: controller:latest
         imagePullPolicy: Always
+        env:
+        - name: RELATED_IMAGE_DEX
+          value: quay.io/dexidp/dex:v2.28.1
         name: manager
         securityContext:
           allowPrivilegeEscalation: false
