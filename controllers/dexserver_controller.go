@@ -195,11 +195,13 @@ func isNotDefinedServiceAccount(m *authv1alpha1.DexServer, r *DexServerReconcile
 	resource := &corev1.ServiceAccount{}
 	// if err := r.Get(ctx, types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
 	if err := r.Get(ctx, types.NamespacedName{Name: SERVICE_ACCOUNT_NAME, Namespace: m.Namespace}, resource); err != nil {
-		if errors.IsNotFound(err) {
-			return true
-		} else {
-			return true
-		}
+		// Sonarcloud does not like both branches returning true
+		//		if errors.IsNotFound(err) {
+		//			return true
+		//		} else {
+		//			return true
+		///		}
+		return true
 	}
 	return false
 }
