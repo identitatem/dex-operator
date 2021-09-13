@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 
 	routev1 "github.com/openshift/api/route/v1"
 	"gopkg.in/yaml.v2"
@@ -43,7 +44,7 @@ const (
 	SECRET_WEB_TLS_SUFFIX = "-tls-secret"
 	SERVICE_ACCOUNT_NAME  = "dex-operator-dexsso"
 	GRPC_SERVICE_NAME     = "dex"
-	DEX_IMAGE             = "quay.io/dexidp/dex:v2.28.1"
+	DEX_IMAGE_ENV_NAME    = "RELATED_IMAGE_DEX"
 )
 
 var (
@@ -145,7 +146,11 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{Requeue: true}, nil
 
 	case isNotDefinedDeployment(dexServer, r, ctx):
-		spec := r.defineDeployment(dexServer)
+		spec, err := r.defineDeployment(dexServer)
+		if err != nil {
+			log.Info("Error creating deployment definition", err)
+			return ctrl.Result{}, err
+		}
 		log.Info("Creating a new Deployment", "Deployment.Namespace", spec.Namespace, "Deployment.Name", spec.Name)
 		if err := r.Create(ctx, spec); err != nil {
 			log.Info("failed to create deployment", "Deployment.Name", spec.Name)
@@ -283,9 +288,21 @@ func (r *DexServerReconciler) defineServiceAccount(m *authv1alpha1.DexServer) *c
 	return serviceAccountSpec
 }
 
+func getDexImagePullSpec() (string, error) {
+	imageName := os.Getenv(DEX_IMAGE_ENV_NAME)
+	if len(imageName) == 0 {
+		return "", fmt.Errorf("Required environment variable %v is empty or not set", DEX_IMAGE_ENV_NAME)
+	}
+	return imageName, nil
+}
+
 // Defines the dex instance (dex server).
-func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv1.Deployment {
+func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) (*appsv1.Deployment, error) {
 	ls := labelsForDexServer(m.Name, m.Namespace)
+	dexImage, err := getDexImagePullSpec()
+	if err != nil {
+		return nil, err
+	}
 	// replicas := m.Spec.Size
 	var replicas int32 = 1
 
@@ -310,7 +327,7 @@ func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv
 							"serve",
 							"/etc/dex/cfg/config.yaml",
 						},
-						Image:           DEX_IMAGE,
+						Image:           dexImage,
 						ImagePullPolicy: corev1.PullAlways,
 						Name:            m.Name,
 						Env: []corev1.EnvVar{
@@ -393,7 +410,7 @@ func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) *appsv
 	dep.Spec.Template.Spec.ServiceAccountName = SERVICE_ACCOUNT_NAME
 
 	ctrl.SetControllerReference(m, dep, r.Scheme)
-	return dep
+	return dep, nil
 }
 
 func (r *DexServerReconciler) defineService(m *authv1alpha1.DexServer) *corev1.Service {
@@ -483,7 +500,7 @@ type DexGrpcSpec struct {
 	Reflection  bool   `yaml:"reflection,omitempty"`
 }
 
-// The DexConnectorConfigSpec is specific to the Github connector as of now 
+// The DexConnectorConfigSpec is specific to the Github connector as of now
 // TODO: Add config properties for ldap
 type DexConnectorConfigSpec struct {
 	ClientID     string `yaml:"clientID,omitempty"`
@@ -574,7 +591,7 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 			Type: connectorType,
 			Id:   connector.Id,
 			Name: connector.Name,
-			Config: DexConnectorConfigSpec{	// This definition is specific to the Github connector (the ldap configuration has different attributes for config)
+			Config: DexConnectorConfigSpec{ // This definition is specific to the Github connector (the ldap configuration has different attributes for config)
 				ClientID:     connector.Config.ClientID,
 				ClientSecret: clientSecret,
 				RedirectURI:  connector.Config.RedirectURI,

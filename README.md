@@ -31,6 +31,8 @@ This is a operator-sdk based operator to deploy and manage a Dex server instance
     export IMAGE_TAG_BASE=quay.io/cdoan/dex-operator
     # OPTIONAL: arbitrarly change the version number of the image and bundle.
     export VERSION=0.0.5
+    # OPTIONAL: specify an alternate dex server image
+    # export DEX_IMAGE=your.internal.registry.io/x/y:v0.0.0
 
     # build all the components
     make bits

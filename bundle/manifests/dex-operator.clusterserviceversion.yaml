@@ -314,6 +314,9 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
+                env:
+                - name: RELATED_IMAGE_DEX
+                  value: quay.io/dexidp/dex:v2.28.1
                 image: quay.io/cdoan/dex-operator:0.0.4
                 imagePullPolicy: Always
                 livenessProbe:
