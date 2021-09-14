@@ -82,8 +82,6 @@ spec:
                 type: array
               state:
                 type: string
-            required:
-            - relatedObjects
             type: object
         type: object
     served: true

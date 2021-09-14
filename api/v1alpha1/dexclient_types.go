@@ -50,7 +50,8 @@ type DexClientStatus struct {
 	// +optional
 	State string `json:"state,omitempty"`
 	// +optional
-	Message        string                   `json:"message,omitempty"`
+	Message string `json:"message,omitempty"`
+	// +optional
 	RelatedObjects []RelatedObjectReference `json:"relatedObjects"`
 }
 
