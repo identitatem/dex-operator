@@ -214,6 +214,20 @@ spec:
             properties:
               message:
                 type: string
+              relatedObjects:
+                items:
+                  properties:
+                    kind:
+                      description: the Kind of the referenced resource
+                      type: string
+                    name:
+                      description: The name of the referenced object
+                      type: string
+                    namespace:
+                      description: The namespace of the referenced object
+                      type: string
+                  type: object
+                type: array
               state:
                 type: string
             type: object

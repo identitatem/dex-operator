@@ -24,9 +24,6 @@ This is a operator-sdk based operator to deploy and manage a Dex server instance
     cd dex-operator
     oc new-project dex-operator
 
-    # HACK - for now, manually create the clusterrole/binding to give dex access to dex resources
-    oc apply -f hack/community/rbac-dex-operator-dexsso-community.yaml
-
     # Set the path to your quay repo.
     export IMAGE_TAG_BASE=quay.io/cdoan/dex-operator
     # OPTIONAL: arbitrarly change the version number of the image and bundle.
