@@ -51,6 +51,8 @@ type DexClientStatus struct {
 	State string `json:"state,omitempty"`
 	// +optional
 	Message string `json:"message,omitempty"`
+	// +optional
+	RelatedObjects []RelatedObjectReference `json:"relatedObjects"`
 }
 
 //+kubebuilder:object:root=true

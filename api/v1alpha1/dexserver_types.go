@@ -119,6 +119,17 @@ type DexServerStatus struct {
 	State string `json:"state,omitempty"`
 	// +optional
 	Message string `json:"message,omitempty"`
+	// +optional
+	RelatedObjects []RelatedObjectReference `json:"relatedObjects"`
+}
+
+type RelatedObjectReference struct {
+	// the Kind of the referenced resource
+	Kind string `json:"kind,omitempty"`
+	// The name of the referenced object
+	Name string `json:"name,omitempty"`
+	// The namespace of the referenced object
+	Namespace string `json:"namespace,omitempty"`
 }
 
 //+kubebuilder:object:root=true
