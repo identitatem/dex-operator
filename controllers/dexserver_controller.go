@@ -26,6 +26,7 @@ import (
 	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -76,6 +77,7 @@ type DexServerReconciler struct {
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes/custom-host,verbs=create;patch
 //+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources={clusterroles},verbs=get;list;watch;create;update;patch;delete;escalate;bind
+//+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources={clusterrolebindings},verbs=get;list;create
 //+kubebuilder:rbac:groups="apiextensions.k8s.io",resources={customresourcedefinitions},verbs=get;list;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -89,6 +91,7 @@ type DexServerReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
+	log.Info("Reconciling...")
 	dexServer := &authv1alpha1.DexServer{}
 	if err := r.Get(ctx, req.NamespacedName, dexServer); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -141,6 +144,24 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		log.Info("Creating a new ServiceAccount", "ServiceAccount.Namespace", spec.Namespace, "ServiceAccount.Name", spec.Name)
 		if err := r.Create(ctx, spec); err != nil {
 			log.Info("failed to create ServiceAccount", "ServiceAccount.Name", SERVICE_ACCOUNT_NAME)
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+
+	case isNotDefinedClusterRole(dexServer, r, ctx):
+		spec := r.defineClusterRole(dexServer)
+		log.Info("Creating a new ClusterRole", "ClusterRole.Name", spec.Name)
+		if err := r.Create(ctx, spec); err != nil {
+			log.Info("failed to create ClusterRole", "ClusterRole.Name", spec.Name)
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+
+	case isNotDefinedClusterRoleBinding(dexServer, r, ctx):
+		spec := r.defineClusterRoleBinding(dexServer)
+		log.Info("Creating a new ClusterRoleBinding", "ClusterRoleBinding.Name", spec.Name)
+		if err := r.Create(ctx, spec); err != nil {
+			log.Info("failed to create ClusterRoleBinding", "ClusterRoleBinding.Name", spec.Name)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
@@ -201,6 +222,22 @@ func isNotDefinedServiceAccount(m *authv1alpha1.DexServer, r *DexServerReconcile
 		//		} else {
 		//			return true
 		///		}
+		return true
+	}
+	return false
+}
+
+func isNotDefinedClusterRole(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
+	resource := &rbacv1.ClusterRole{}
+	if err := r.Get(ctx, types.NamespacedName{Name: SERVICE_ACCOUNT_NAME}, resource); err != nil {
+		return true
+	}
+	return false
+}
+
+func isNotDefinedClusterRoleBinding(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
+	resource := &rbacv1.ClusterRoleBinding{}
+	if err := r.Get(ctx, types.NamespacedName{Name: SERVICE_ACCOUNT_NAME + "-" + m.Namespace}, resource); err != nil {
 		return true
 	}
 	return false
@@ -288,6 +325,62 @@ func (r *DexServerReconciler) defineServiceAccount(m *authv1alpha1.DexServer) *c
 	}
 	ctrl.SetControllerReference(m, serviceAccountSpec, r.Scheme)
 	return serviceAccountSpec
+}
+
+func (r *DexServerReconciler) defineClusterRole(m *authv1alpha1.DexServer) *rbacv1.ClusterRole {
+	clusterRoleSpec := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: SERVICE_ACCOUNT_NAME,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				Resources: []string{
+					"*",
+				},
+				Verbs: []string{
+					"*",
+				},
+				APIGroups: []string{
+					"dex.coreos.com",
+				},
+			},
+			{
+				Resources: []string{
+					"customresourcedefinitions",
+				},
+				Verbs: []string{
+					"create",
+				},
+				APIGroups: []string{
+					"apiextensions.k8s.io",
+				},
+			},
+		},
+	}
+	ctrl.SetControllerReference(m, clusterRoleSpec, r.Scheme)
+	return clusterRoleSpec
+}
+
+func (r *DexServerReconciler) defineClusterRoleBinding(m *authv1alpha1.DexServer) *rbacv1.ClusterRoleBinding {
+	clusterRoleBindingSpec := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: SERVICE_ACCOUNT_NAME + "-" + m.Namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "ClusterRole",
+			Name:     SERVICE_ACCOUNT_NAME,
+			APIGroup: "rbac.authorization.k8s.io",
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      SERVICE_ACCOUNT_NAME,
+				Namespace: m.Namespace,
+			},
+		},
+	}
+	ctrl.SetControllerReference(m, clusterRoleBindingSpec, r.Scheme)
+	return clusterRoleBindingSpec
 }
 
 func getDexImagePullSpec() (string, error) {
