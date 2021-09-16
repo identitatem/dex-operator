@@ -784,6 +784,8 @@ func (r *DexServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&corev1.Secret{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&rbacv1.ClusterRole{}).
+		Owns(&rbacv1.ClusterRoleBinding{}).
 		Owns(&routev1.Route{}). /* TODO(cdoan): add Ingress */
 		Complete(r)
 }
