@@ -69,7 +69,7 @@ type Oauth2Spec struct {
 // ConfigSpec describes the client id and secret. The RedirectURI should be returned?
 type ConfigSpec struct {
 	ClientID        string                 `json:"clientID,omitempty"`
-	ClientSecretRef corev1.ObjectReference `json:"clientSecretRef,omitempty"`
+	ClientSecretRef corev1.SecretReference `json:"clientSecretRef,omitempty"`
 	// TODO: confirm if we set this, or allow this to be passed in?
 	RedirectURI string `json:"redirectURI,omitempty"`
 	Org         string `json:"org,omitempty"`

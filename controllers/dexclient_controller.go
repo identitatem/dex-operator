@@ -20,7 +20,10 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -94,8 +97,10 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			"Public", dexv1Client.Spec.Public,
 			"ClientID", dexv1Client.Spec.ClientID,
 			"LogoURL", dexv1Client.Spec.LogoURL,
-			"clientSecret", "REDACTED")
-		//"clientSecret", dexv1Client.Spec.ClientSecret)
+			"clientSecretRef", dexv1Client.Spec.ClientSecretRef.Name)
+
+		// read clientSecret from secret
+		dexclientclientSecret := getClientClientSecretFromRef(r, dexv1Client, ctx)
 
 		// Implement dex auth client creation here
 		res, err := r.DexApiClient.CreateClient(
@@ -103,10 +108,10 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			dexv1Client.Spec.RedirectURIs,
 			dexv1Client.Spec.TrustedPeers,
 			dexv1Client.Spec.Public,
-			dexv1Client.Spec.ClientID, // name
-			dexv1Client.Name,          // clientid
+			dexv1Client.Name,
+			dexv1Client.Spec.ClientID,
 			dexv1Client.Spec.LogoURL,
-			dexv1Client.Spec.ClientSecret, // secret
+			dexclientclientSecret,
 		)
 		if err != nil {
 			log.Error(err, "Client create failed", "client", dexv1Client.Name)
@@ -122,11 +127,11 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		log.Info("Client update", "client ID", dexv1Client.Name)
 		err := r.DexApiClient.UpdateClient(
 			ctx,
-			dexv1Client.Name, // clientid
+			dexv1Client.Spec.ClientID,
 			dexv1Client.Spec.RedirectURIs,
 			dexv1Client.Spec.TrustedPeers,
 			dexv1Client.Spec.Public,
-			dexv1Client.Spec.ClientID,
+			dexv1Client.Name,
 			dexv1Client.Spec.LogoURL,
 		)
 		if err != nil {
@@ -165,5 +170,19 @@ func isgRPCConnection(r *DexClientReconciler, m *authv1alpha1.DexClient, ctx con
 func (r *DexClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&authv1alpha1.DexClient{}).
+		Owns(&corev1.Secret{}).
 		Complete(r)
+}
+
+func getClientClientSecretFromRef(r *DexClientReconciler, m *authv1alpha1.DexClient, ctx context.Context) string {
+
+	secretName := m.Spec.ClientSecretRef.Name
+	secretNamespace := m.Spec.ClientSecretRef.Namespace
+
+	resource := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
+		// TODO(cdoan): handle errors
+		return ""
+	}
+	return string(resource.Data["clientSecret"])
 }

@@ -82,7 +82,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    operators.operatorframework.io/builder: operator-sdk-v1.11.0
+    operators.operatorframework.io/builder: operator-sdk-v1.12.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
   name: dex-operator.v0.0.11
   namespace: placeholder
@@ -325,8 +325,8 @@ spec:
                 - /manager
                 env:
                 - name: RELATED_IMAGE_DEX
-                  value: brew.registry.redhat.io/rh-osbs/openshift-gitops-1-dex-rhel8:v1.3.0-3
-                image: quay.io/rbobbitt/dex-operator:0.0.11
+                  value: quay.io/dexidp/dex:v2.28.1
+                image: quay.io/cdoan/dex-operator:0.0.11
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:

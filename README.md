@@ -51,22 +51,22 @@ This is a operator-sdk based operator to deploy and manage a Dex server instance
 
 3. if you have not done so already, generate or collect the github oauth application information and set the appropriate environment variables. An example of a github app will have these values like this to reference the dex service :
 
-    | key | value |
-    |-----|-------|
-    | Application name: | any-string |
-    | Homepage URL: | https://dex2-dex-operator.apps.pool-sno8x32sp2-w4qpg.demo.red-chesterfield.com |
+    | key                         | example values format |
+    |-----------------------------|-----------------------|
+    | Application name:           | any-string |
+    | Homepage URL:               | https://dex2-dex-operator.apps.pool-sno8x32sp2-w4qpg.demo.red-chesterfield.com |
     | Authorization callback URL: | https://dex2-dex-operator.apps.pool-sno8x32sp2-w4qpg.demo.red-chesterfield.com/callback |
 
     Where the URL references the location of the dex **Service**.
 
     ```bash
-    export GITHUB_APP_CLIENTID=xxx
-    export GITHUB_APP_CLIENTSECRET=xxx
-    export CLIENT_NAME=some-string
-    export CLIENT_SECRET=some-secret-string
+    # override your github application client id
+    export DEXSERVER_CLIENT_ID=...
+    # override your github application client secret
+    export DEXSERVER_CLIENT_SECRET=...
     ```
 
-4. generate the manifests
+4. generate the minimal set of manifests for github OAUTH application authentication
 
     ```bash
     cd hack
@@ -89,7 +89,7 @@ This is a operator-sdk based operator to deploy and manage a Dex server instance
 7. create a dex client
 
     ```bash
-    oc apply -f hack/demo-dexclient-hub.yaml
+    oc apply -f hack/demo-dexclient-dexclient-cluster2.yaml
     ```
 
 8. verify the dex client record is created in dex
