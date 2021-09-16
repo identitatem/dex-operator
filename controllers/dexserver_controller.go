@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/identitatem/dex-operator/api/v1alpha1"
 	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
 )
 
@@ -275,18 +276,24 @@ func isNotDefinedConfigmap(m *authv1alpha1.DexServer, r *DexServerReconciler, ct
 	return false
 }
 
-func getClientSecretFromRef(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) string {
-	var secretNamespace string
-	secretName := m.Spec.Connectors[0].GitHub.ClientSecretRef.Name
-	if secretNamespace = m.Spec.Connectors[0].GitHub.ClientSecretRef.Namespace; secretNamespace == "" {
-		secretNamespace = m.Namespace
+func getClientSecretFromRef(connector v1alpha1.ConnectorSpec, m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) string {
+	var secretNamespace, secretName string
+
+	switch connector.Type {
+	case authv1alpha1.ConnectorTypeGitHub:
+		secretName = connector.GitHub.ClientSecretRef.Name
+		if secretNamespace = connector.GitHub.ClientSecretRef.Namespace; secretNamespace == "" {
+			secretNamespace = m.Namespace
+		}
+		resource := &corev1.Secret{}
+		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
+			// TODO(cdoan): handle errors
+			return ""
+		}
+		return string(resource.Data["clientSecret"])
+	default:
+		return "" // TODO: handle errors
 	}
-	resource := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
-		// TODO(cdoan): handle errors
-		return ""
-	}
-	return string(resource.Data["clientSecret"])
 }
 
 // Define the secret for grpc Mutual TLS. This secret is volume mounted on the dex instance pod. The client cert should be loaded by the gRPC client code.
@@ -638,7 +645,6 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 	labels := map[string]string{
 		"app": m.Name,
 	}
-	clientSecret := getClientSecretFromRef(m, r, ctx)
 
 	// Define config yaml data for Dex
 	configYamlData := DexConfigYamlSpec{
@@ -674,26 +680,28 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 		switch connector.Type {
 		case authv1alpha1.ConnectorTypeGitHub:
 			connectorType = string(authv1alpha1.ConnectorTypeGitHub)
+			// Get Github ClientSecret
+			clientSecret := getClientSecretFromRef(connector, m, r, ctx)
+			newConnector := DexConnectorSpec{
+				Type: connectorType,
+				Id:   connector.Id,
+				Name: connector.Name,
+				Config: DexConnectorConfigSpec{
+					GitHub: dexgithub.Config{
+						ClientID:     connector.GitHub.ClientID,
+						ClientSecret: clientSecret,
+						RedirectURI:  connector.GitHub.RedirectURI,
+						Org:          "kubernetes",
+					},
+				},
+			}
+			configYamlData.Connectors = append(configYamlData.Connectors, newConnector)
 		case authv1alpha1.ConnectorTypeLDAP:
 			connectorType = string(authv1alpha1.ConnectorTypeLDAP)
 		default:
 			connectorType = string(authv1alpha1.ConnectorTypeGitHub)
 		}
 
-		newConnector := DexConnectorSpec{
-			Type: connectorType,
-			Id:   connector.Id,
-			Name: connector.Name,
-			Config: DexConnectorConfigSpec{ // This definition is specific to the Github connector (the ldap configuration has different attributes for config)
-				GitHub: dexgithub.Config{
-					ClientID:     connector.GitHub.ClientID,
-					ClientSecret: clientSecret,
-					RedirectURI:  connector.GitHub.RedirectURI,
-					Org:          "kubernetes",
-				},
-			},
-		}
-		configYamlData.Connectors = append(configYamlData.Connectors, newConnector)
 	}
 
 	// The following code can be uncommented if we need to use StaticClients
