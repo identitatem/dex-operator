@@ -71,7 +71,7 @@ spec:
   - type: github
     id: github
     name: github
-    config:
+    github:
       clientID: "${DEXSERVER_CLIENT_ID}"
       clientSecretRef:
         name: ${DEXSERVER_CLIENT_SECRET_NAME}

@@ -276,8 +276,8 @@ func isNotDefinedConfigmap(m *authv1alpha1.DexServer, r *DexServerReconciler, ct
 
 func getClientSecretFromRef(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) string {
 	var secretNamespace string
-	secretName := m.Spec.Connectors[0].Config.ClientSecretRef.Name
-	if secretNamespace = m.Spec.Connectors[0].Config.ClientSecretRef.Namespace; secretNamespace == "" {
+	secretName := m.Spec.Connectors[0].GitHub.ClientSecretRef.Name
+	if secretNamespace = m.Spec.Connectors[0].GitHub.ClientSecretRef.Namespace; secretNamespace == "" {
 		secretNamespace = m.Namespace
 	}
 	resource := &corev1.Secret{}
@@ -687,9 +687,9 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 			Id:   connector.Id,
 			Name: connector.Name,
 			Config: DexConnectorConfigSpec{ // This definition is specific to the Github connector (the ldap configuration has different attributes for config)
-				ClientID:     connector.Config.ClientID,
+				ClientID:     connector.GitHub.ClientID,
 				ClientSecret: clientSecret,
-				RedirectURI:  connector.Config.RedirectURI,
+				RedirectURI:  connector.GitHub.RedirectURI,
 				Org:          "kubernetes",
 			},
 		}

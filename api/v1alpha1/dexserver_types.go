@@ -66,22 +66,40 @@ type Oauth2Spec struct {
 	PasswordConnector     string   `json:"passwordConnector,omitempty"`
 }
 
-// ConfigSpec describes the client id and secret. The RedirectURI should be returned?
-type ConfigSpec struct {
+// Org holds org-team filters (GitHub), in which teams are optional.
+type Org struct {
+	// Organization name in github (not slug, full name). Only users in this github
+	// organization can authenticate.
+	Name string `json:"name"`
+
+	// Names of teams in a github organization. A user will be able to
+	// authenticate if they are members of at least one of these teams. Users
+	// in the organization can authenticate if this field is omitted from the
+	// config file.
+	Teams []string `json:"teams,omitempty"`
+}
+
+// GitHubConfigSpec describes the configuration specific to the GitHub connector
+type GitHubConfigSpec struct {
 	ClientID        string                 `json:"clientID,omitempty"`
 	ClientSecretRef corev1.SecretReference `json:"clientSecretRef,omitempty"`
-	// TODO: confirm if we set this, or allow this to be passed in?
-	RedirectURI string `json:"redirectURI,omitempty"`
-	Org         string `json:"org,omitempty"`
+	RedirectURI     string                 `json:"redirectURI,omitempty"`
+	Org             string                 `json:"org,omitempty"`
+	Orgs            []Org                  `json:"orgs,omitempty"`
+	HostName        string                 `json:"hostName,omitempty"`
+	RootCA          string                 `json:"rootCA,omitempty"`
+	TeamNameField   string                 `json:"teamNameField,omitempty"`
+	LoadAllGroups   bool                   `json:"loadAllGroups,omitempty"`
+	UseLoginAsID    bool                   `json:"useLoginAsID,omitempty"`
 }
 
 // ConnectorSpec defines the OIDC connector config details
 type ConnectorSpec struct {
 	Name string `json:"name,omitempty"`
 	// +kubebuilder:validation:Enum=github;ldap
-	Type   ConnectorType `json:"type,omitempty"`
-	Id     string        `json:"id,omitempty"`
-	Config ConfigSpec    `json:"config,omitempty"`
+	Type   ConnectorType    `json:"type,omitempty"`
+	Id     string           `json:"id,omitempty"`
+	GitHub GitHubConfigSpec `json:"github,omitempty"`
 }
 
 type ConnectorType string
