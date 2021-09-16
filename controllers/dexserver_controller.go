@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 
+	dexgithub "github.com/dexidp/dex/connector/github"
 	routev1 "github.com/openshift/api/route/v1"
 	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
@@ -598,10 +599,7 @@ type DexGrpcSpec struct {
 // The DexConnectorConfigSpec is specific to the Github connector as of now
 // TODO: Add config properties for ldap
 type DexConnectorConfigSpec struct {
-	ClientID     string `yaml:"clientID,omitempty"`
-	ClientSecret string `yaml:"clientSecret,omitempty"`
-	RedirectURI  string `yaml:"redirectURI,omitempty"`
-	Org          string `yaml:"org,omitempty"`
+	GitHub dexgithub.Config `yaml:",inline,omitempty"`
 }
 
 type DexConnectorSpec struct {
@@ -687,10 +685,12 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 			Id:   connector.Id,
 			Name: connector.Name,
 			Config: DexConnectorConfigSpec{ // This definition is specific to the Github connector (the ldap configuration has different attributes for config)
-				ClientID:     connector.GitHub.ClientID,
-				ClientSecret: clientSecret,
-				RedirectURI:  connector.GitHub.RedirectURI,
-				Org:          "kubernetes",
+				GitHub: dexgithub.Config{
+					ClientID:     connector.GitHub.ClientID,
+					ClientSecret: clientSecret,
+					RedirectURI:  connector.GitHub.RedirectURI,
+					Org:          "kubernetes",
+				},
 			},
 		}
 		configYamlData.Connectors = append(configYamlData.Connectors, newConnector)
