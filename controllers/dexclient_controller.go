@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -100,7 +101,11 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			"clientSecretRef", dexv1Client.Spec.ClientSecretRef.Name)
 
 		// read clientSecret from secret
-		dexclientclientSecret := getClientClientSecretFromRef(r, dexv1Client, ctx)
+		dexclientclientSecret, err := getClientClientSecretFromRef(r, dexv1Client, ctx)
+		if err != nil {
+			log.Error(err, "Client create failed", "client", dexv1Client.Name)
+			return r.updateStatus(ctx, dexv1Client, authv1alpha1.PhaseFailed, err)
+		}
 
 		// Implement dex auth client creation here
 		res, err := r.DexApiClient.CreateClient(
@@ -115,8 +120,7 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		)
 		if err != nil {
 			log.Error(err, "Client create failed", "client", dexv1Client.Name)
-			dexv1Client.Status.State = authv1alpha1.PhaseFailed
-			dexv1Client.Status.Message = err.Error()
+			return r.updateStatus(ctx, dexv1Client, authv1alpha1.PhaseFailed, err)
 		} else {
 			dexv1Client.Status.State = authv1alpha1.PhaseActive
 			log.Info("Client created", "client ID", res.GetId())
@@ -136,8 +140,7 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		)
 		if err != nil {
 			log.Error(err, "Client update failed", "client", dexv1Client.Name)
-			dexv1Client.Status.State = authv1alpha1.PhaseActiveDegraded
-			dexv1Client.Status.Message = err.Error()
+			return r.updateStatus(ctx, dexv1Client, authv1alpha1.PhaseActiveDegraded, err)
 		} else {
 			log.Info("Client updated", "client ID", dexv1Client.Name)
 		}
@@ -162,6 +165,16 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{}, nil
 }
 
+func (r *DexClientReconciler) updateStatus(ctx context.Context, dexClient *authv1alpha1.DexClient, status string, inErr error) (ctrl.Result, error) {
+	dexClient.Status.State = status
+	dexClient.Status.Message = inErr.Error()
+	err := r.Status().Update(ctx, dexClient)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, inErr
+}
+
 func isgRPCConnection(r *DexClientReconciler, m *authv1alpha1.DexClient, ctx context.Context) bool {
 	return ctls.caPEM != nil && r.DexApiClient == nil
 }
@@ -174,15 +187,19 @@ func (r *DexClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func getClientClientSecretFromRef(r *DexClientReconciler, m *authv1alpha1.DexClient, ctx context.Context) string {
+func getClientClientSecretFromRef(r *DexClientReconciler, m *authv1alpha1.DexClient, ctx context.Context) (string, error) {
 
 	secretName := m.Spec.ClientSecretRef.Name
 	secretNamespace := m.Spec.ClientSecretRef.Namespace
 
 	resource := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
-		// TODO(cdoan): handle errors
-		return ""
+		return "", err
 	}
-	return string(resource.Data["clientSecret"])
+
+	var secret string
+	if secret, ok := resource.Data["clientSecret"]; ok {
+		return string(secret), nil
+	}
+	return "", fmt.Errorf("secret %s/%s doesn't contain the data clientSecret", secretNamespace, secret)
 }
