@@ -169,7 +169,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	case isNotDefinedDeployment(dexServer, r, ctx):
 		spec, err := r.defineDeployment(dexServer)
 		if err != nil {
-			log.Info("Error creating deployment definition", err)
+			log.Error(err, "Eerror creating deployment definition")
 			return ctrl.Result{}, err
 		}
 		log.Info("Creating a new Deployment", "Deployment.Namespace", spec.Namespace, "Deployment.Name", spec.Name)
