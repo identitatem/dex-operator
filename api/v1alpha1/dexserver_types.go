@@ -93,6 +93,92 @@ type GitHubConfigSpec struct {
 	UseLoginAsID    bool                   `json:"useLoginAsID,omitempty"`
 }
 
+// LDAP UserMatcher holds information about user and group matching
+type UserMatcher struct {
+	UserAttr  string `json:"userAttr"`
+	GroupAttr string `json:"groupAttr"`
+}
+
+// LDAP User entry search configuration
+type UserSearchSpec struct {
+	// BaseDN to start the search from. For example "cn=users,dc=example,dc=com"
+	BaseDN string `json:"baseDN,omitempty"`
+
+	// Optional filter to apply when searching the directory. For example "(objectClass=person)"
+	Filter string `json:"filter,omitempty"`
+
+	// Attribute to match against the inputted username. This will be translated and combined
+	// with the other filter as "(<attr>=<username>)".
+	Username string `json:"username,omitempty"`
+
+	// Can either be:
+	// * "sub" - search the whole sub tree
+	// * "one" - only search one level
+	Scope string `json:"scope,omitempty"`
+
+	// A mapping of attributes on the user entry to claims.
+	IDAttr    string `json:"idAttr,omitempty"`    // Defaults to "uid"
+	EmailAttr string `json:"emailAttr,omitempty"` // Defaults to "mail"
+	NameAttr  string `json:"nameAttr,omitempty"`  // No default.
+}
+
+// LDAP Group search configuration
+type GroupSearchSpec struct {
+	// BaseDN to start the search from. For example "cn=groups,dc=example,dc=com"
+	BaseDN string `json:"baseDN,omitempty"`
+
+	// Optional filter to apply when searching the directory. For example "(objectClass=posixGroup)"
+	Filter string `json:"filter,omitempty"`
+
+	Scope string `json:"scope,omitempty"` // Defaults to "sub"
+
+	// Array of the field pairs used to match a user to a group.
+	// See the "UserMatcher" struct for the exact field names
+	//
+	// Each pair adds an additional requirement to the filter that an attribute in the group
+	// match the user's attribute value. For example that the "members" attribute of
+	// a group matches the "uid" of the user. The exact filter being added is:
+	//
+	//   (userMatchers[n].<groupAttr>=userMatchers[n].<userAttr value>)
+	//
+	UserMatchers []UserMatcher `json:"userMatchers,omitempty"`
+
+	// The attribute of the group that represents its name.
+	NameAttr string `json:"nameAttr,omitempty"`
+}
+
+// LDAPConfigSpec describes the configuration specific to the LDAP connector
+type LDAPConfigSpec struct {
+	// The host and optional port of the LDAP server. If port isn't supplied, it will be guessed based on the TLS configuration. 389 or 636.
+	Host string `json:"host,omitempty"`
+	// Required if LDAP host does not use TLS
+	InsecureNoSSL bool `json:"insecureNoSSL,omitempty"`
+	// Connect to the insecure port then issue a StartTLS command to negotiate a
+	// secure connection. If unsupplied secure connections will use the LDAPS
+	// protocol.
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+	// Connect to the insecure port and then issue a StartTLS command to negotiate a secure connection.
+	// If unspecified, connections will use the ldaps:// protocol
+	StartTLS bool `json:"startTLS,omitempty"`
+	// Path to a trusted root certificate file. Default: use the host's root CA
+	RootCA string `json:"rootCA,omitempty"`
+	// A raw certificate file can also be provided inline as a base64 encoded PEM file.
+	RootCAData []byte `json:"rootCAData,omitempty"`
+	// The DN for an application service account. The connector uses the bindDN and bindPW as credentials to
+	// search for users and groups. Not required if the LDAP server provides access for anonymous auth.
+	BindDN string `json:"bindDN,omitempty"`
+	// Secret reference to the password for an application service account. The connector uses the bindDN and bindPW
+	// as credentials to search for users and groups. Not required if the LDAP server provides access
+	// for anonymous auth.
+	BindPWRef corev1.SecretReference `json:"bindPWRef,omitempty"`
+	// The attribute to display in the provided password prompt. If unset, will display "Username"
+	UsernamePrompt string `json:"usernamePrompt,omitempty"`
+	// User entry search configuration.
+	UserSearch UserSearchSpec `json:"userSearch,omitempty"`
+	// Group search configuration.
+	GroupSearch GroupSearchSpec `json:"groupSearch,omitempty"`
+}
+
 // ConnectorSpec defines the OIDC connector config details
 type ConnectorSpec struct {
 	Name string `json:"name,omitempty"`
@@ -100,6 +186,7 @@ type ConnectorSpec struct {
 	Type   ConnectorType    `json:"type,omitempty"`
 	Id     string           `json:"id,omitempty"`
 	GitHub GitHubConfigSpec `json:"github,omitempty"`
+	LDAP   LDAPConfigSpec   `json:"ldap,omitempty"`
 }
 
 type ConnectorType string

@@ -3,7 +3,6 @@ module github.com/identitatem/dex-operator
 go 1.16
 
 require (
-	github.com/dexidp/dex v2.13.0+incompatible
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.14.0

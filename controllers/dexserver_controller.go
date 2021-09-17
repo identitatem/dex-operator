@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 
-	dexgithub "github.com/dexidp/dex/connector/github"
 	routev1 "github.com/openshift/api/route/v1"
 	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
@@ -276,7 +275,7 @@ func isNotDefinedConfigmap(m *authv1alpha1.DexServer, r *DexServerReconciler, ct
 	return false
 }
 
-func getClientSecretFromRef(connector v1alpha1.ConnectorSpec, m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) string {
+func getConnectorSecretFromRef(connector v1alpha1.ConnectorSpec, m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) (string, error) {
 	var secretNamespace, secretName string
 
 	switch connector.Type {
@@ -287,13 +286,23 @@ func getClientSecretFromRef(connector v1alpha1.ConnectorSpec, m *authv1alpha1.De
 		}
 		resource := &corev1.Secret{}
 		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
-			// TODO(cdoan): handle errors
-			return ""
+			return "", err
 		}
-		return string(resource.Data["clientSecret"])
+		return string(resource.Data["clientSecret"]), nil
+	case authv1alpha1.ConnectorTypeLDAP:
+		secretName = connector.LDAP.BindPWRef.Name
+		if secretNamespace = connector.LDAP.BindPWRef.Namespace; secretNamespace == "" {
+			secretNamespace = m.Namespace
+		}
+		resource := &corev1.Secret{}
+		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
+			return "", err
+		}
+		return string(resource.Data["bindPW"]), nil
 	default:
-		return "" // TODO: handle errors
+		return "", fmt.Errorf("could not retrieve secret")
 	}
+
 }
 
 // Define the secret for grpc Mutual TLS. This secret is volume mounted on the dex instance pod. The client cert should be loaded by the gRPC client code.
@@ -603,10 +612,32 @@ type DexGrpcSpec struct {
 	Reflection  bool   `yaml:"reflection,omitempty"`
 }
 
-// The DexConnectorConfigSpec is specific to the Github connector as of now
-// TODO: Add config properties for ldap
 type DexConnectorConfigSpec struct {
-	GitHub dexgithub.Config `yaml:",inline,omitempty"`
+	// Github configuration
+	ClientID      string             `json:"clientID,omitempty"`
+	ClientSecret  string             `json:"clientSecret,omitempty"`
+	RedirectURI   string             `json:"redirectURI,omitempty"`
+	Org           string             `json:"org,omitempty"`
+	Orgs          []authv1alpha1.Org `json:"orgs,omitempty"`
+	HostName      string             `json:"hostName,omitempty"`
+	TeamNameField string             `json:"teamNameField,omitempty"`
+	LoadAllGroups bool               `json:"loadAllGroups,omitempty"`
+	UseLoginAsID  bool               `json:"useLoginAsID,omitempty"`
+
+	// LDAP configuration
+	Host               string                       `yaml:"host,omitempty"`
+	InsecureNoSSL      bool                         `yaml:"insecureNoSSL,omitempty"`
+	InsecureSkipVerify bool                         `yaml:"insecureSkipVerify,omitempty"`
+	StartTLS           bool                         `yaml:"startTLS,omitempty"`
+	RootCAData         []byte                       `yaml:"rootCAData,omitempty"`
+	BindDN             string                       `yaml:"bindDN,omitempty"`
+	BindPW             string                       `yaml:"bindPW,omitempty"`
+	UsernamePrompt     string                       `yaml:"usernamePrompt,omitempty"`
+	UserSearch         authv1alpha1.UserSearchSpec  `yaml:"userSearch,omitempty"`
+	GroupSearch        authv1alpha1.GroupSearchSpec `yaml:"groupSearch,omitempty"`
+
+	// Common field between GitHub and LDAP configs
+	RootCA string `json:"rootCA,omitempty"`
 }
 
 type DexConnectorSpec struct {
@@ -616,7 +647,6 @@ type DexConnectorSpec struct {
 	Name   string                 `yaml:"name,omitempty"`
 	Config DexConnectorConfigSpec `yaml:"config,omitempty"`
 }
-
 type DexOauth2Spec struct {
 	SkipApprovalScreen bool `yaml:"skipApprovalScreen,omitempty"`
 }
@@ -675,33 +705,90 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 
 	// Iterate over connectors defined in the DexServer to create the dex configuration for connectors
 	for _, connector := range m.Spec.Connectors {
-		// Determine the connector type
-		var connectorType string
+		var newConnector DexConnectorSpec
+
 		switch connector.Type {
 		case authv1alpha1.ConnectorTypeGitHub:
-			connectorType = string(authv1alpha1.ConnectorTypeGitHub)
-			// Get Github ClientSecret
-			clientSecret := getClientSecretFromRef(connector, m, r, ctx)
-			newConnector := DexConnectorSpec{
-				Type: connectorType,
+			// Get Github ClientSecret from SecretRef
+			clientSecret, err := getConnectorSecretFromRef(connector, m, r, ctx)
+
+			if err != nil {
+				log.Error(err, "Error getting client secret")
+				return nil
+			}
+
+			newConnector = DexConnectorSpec{
+				Type: string(authv1alpha1.ConnectorTypeGitHub),
 				Id:   connector.Id,
 				Name: connector.Name,
 				Config: DexConnectorConfigSpec{
-					GitHub: dexgithub.Config{
-						ClientID:     connector.GitHub.ClientID,
-						ClientSecret: clientSecret,
-						RedirectURI:  connector.GitHub.RedirectURI,
-						Org:          "kubernetes",
-					},
+					ClientID:     connector.GitHub.ClientID,
+					ClientSecret: clientSecret,
+					RedirectURI:  connector.GitHub.RedirectURI,
+					Org:          "kubernetes",
 				},
 			}
-			configYamlData.Connectors = append(configYamlData.Connectors, newConnector)
 		case authv1alpha1.ConnectorTypeLDAP:
-			connectorType = string(authv1alpha1.ConnectorTypeLDAP)
+			// Get LDAP BindPW from SecretRef
+			bindPW, err := getConnectorSecretFromRef(connector, m, r, ctx)
+
+			if err != nil {
+				log.Error(err, "Error getting bind pw")
+				return nil
+			}
+
+			newConnector = DexConnectorSpec{
+				Type: string(authv1alpha1.ConnectorTypeLDAP),
+				Id:   connector.Id,
+				Name: connector.Name,
+				Config: DexConnectorConfigSpec{
+					Host:               connector.LDAP.Host,
+					InsecureNoSSL:      connector.LDAP.InsecureNoSSL,
+					InsecureSkipVerify: connector.LDAP.InsecureSkipVerify,
+					StartTLS:           connector.LDAP.StartTLS,
+					RootCA:             connector.LDAP.RootCA,
+					RootCAData:         connector.LDAP.RootCAData,
+					BindDN:             connector.LDAP.BindDN,
+					BindPW:             bindPW,
+					UsernamePrompt:     connector.LDAP.UsernamePrompt,
+				},
+			}
+
+			if connector.LDAP.UserSearch.BaseDN != "" {
+				newConnector.Config.UserSearch.BaseDN = connector.LDAP.UserSearch.BaseDN
+				newConnector.Config.UserSearch.Filter = connector.LDAP.UserSearch.Filter
+				newConnector.Config.UserSearch.Username = connector.LDAP.UserSearch.Username
+				newConnector.Config.UserSearch.Scope = connector.LDAP.UserSearch.Scope
+				newConnector.Config.UserSearch.IDAttr = connector.LDAP.UserSearch.IDAttr
+				newConnector.Config.UserSearch.EmailAttr = connector.LDAP.UserSearch.EmailAttr
+				newConnector.Config.UserSearch.NameAttr = connector.LDAP.UserSearch.NameAttr
+				newConnector.Config.UserSearch = v1alpha1.UserSearchSpec{
+					BaseDN:    connector.LDAP.UserSearch.BaseDN,
+					Filter:    connector.LDAP.UserSearch.Filter,
+					Username:  connector.LDAP.UserSearch.Username,
+					Scope:     connector.LDAP.UserSearch.Scope,
+					IDAttr:    connector.LDAP.UserSearch.IDAttr,
+					EmailAttr: connector.LDAP.UserSearch.EmailAttr,
+					NameAttr:  connector.LDAP.UserSearch.NameAttr,
+				}
+			}
+
+			if connector.LDAP.GroupSearch.BaseDN != "" {
+				newConnector.Config.GroupSearch = v1alpha1.GroupSearchSpec{
+					BaseDN:       connector.LDAP.GroupSearch.BaseDN,
+					Filter:       connector.LDAP.GroupSearch.Filter,
+					Scope:        connector.LDAP.GroupSearch.Scope,
+					UserMatchers: connector.LDAP.GroupSearch.UserMatchers,
+					NameAttr:     connector.LDAP.GroupSearch.NameAttr,
+				}
+			}
+
 		default:
-			connectorType = string(authv1alpha1.ConnectorTypeGitHub)
+			return nil
 		}
 
+		// Add connector to list
+		configYamlData.Connectors = append(configYamlData.Connectors, newConnector)
 	}
 
 	// The following code can be uncommented if we need to use StaticClients
