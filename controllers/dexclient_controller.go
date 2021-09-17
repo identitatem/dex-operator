@@ -66,6 +66,9 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	log.Info("found dexclient", "DexClient.name", dexv1Client.Name, "DexClient.namespace", dexv1Client.Namespace)
 
 	switch {
+	case isMTLSSecretNotExists(r, dexv1Client, ctx):
+		// log.Info("MTLS secret not found, requeuing ...")
+		return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
 	case isgRPCConnection(r, dexv1Client, ctx):
 		dexApiOptions := &dexapi.Options{
 			HostAndPort: fmt.Sprintf("%s%s", GRPC_SERVICE_NAME, ":5557"),
@@ -185,6 +188,22 @@ func (r *DexClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&authv1alpha1.DexClient{}).
 		Owns(&corev1.Secret{}).
 		Complete(r)
+}
+
+func isMTLSSecretNotExists(r *DexClientReconciler, m *authv1alpha1.DexClient, ctx context.Context) bool {
+	// each dexserver will run in its own namespace
+	// the dex controller will connect to mulitple dexservers
+	// given a DexClient, the MTLS secret will be in the same namespace
+	// we can find this secret by convention name
+	secretNamespace := m.Namespace
+
+	resource := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: SECRET_MTLS_NAME, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
+		// failed to find the secret, wait for the secret to exist
+		return true
+	}
+	// secret exists, continue reading MTLS and connect to GRPC
+	return false
 }
 
 func getClientClientSecretFromRef(r *DexClientReconciler, m *authv1alpha1.DexClient, ctx context.Context) (string, error) {
