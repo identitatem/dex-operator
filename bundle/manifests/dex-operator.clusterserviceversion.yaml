@@ -245,6 +245,7 @@ spec:
           - create
           - get
           - list
+          - watch
         - apiGroups:
           - rbac.authorization.k8s.io
           resources:

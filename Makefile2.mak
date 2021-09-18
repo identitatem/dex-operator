@@ -43,6 +43,7 @@ curl:
 .PHONY: cleanup
 cleanup:
 	operator-sdk cleanup dex-operator
+	oc get oauth2clients -A | awk '{print $$2}' | grep -v NAME | xargs -I % oc delete oauth2clients % || true
 
 .PHONY: wait
 wait:

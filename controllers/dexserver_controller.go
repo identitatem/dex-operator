@@ -44,7 +44,7 @@ const (
 	SECRET_MTLS_SUFFIX    = "-mtls"
 	SECRET_WEB_TLS_SUFFIX = "-tls-secret"
 	SERVICE_ACCOUNT_NAME  = "dex-operator-dexsso"
-	GRPC_SERVICE_NAME     = "dex"
+	GRPC_SERVICE_NAME     = "grpc"
 	DEX_IMAGE_ENV_NAME    = "RELATED_IMAGE_DEX"
 )
 
@@ -99,7 +99,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	switch {
 
 	case isNotDefinedMTLSSecret(dexServer, r, ctx):
-		caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM, err := createMTLS()
+		caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM, err := createMTLS(dexServer.Namespace)
 		if err != nil {
 			log.Info("failed to generate ca, cert and key")
 			return ctrl.Result{}, err

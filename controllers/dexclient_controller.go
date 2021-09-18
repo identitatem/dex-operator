@@ -71,7 +71,7 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
 	case isgRPCConnection(r, dexv1Client, ctx):
 		dexApiOptions := &dexapi.Options{
-			HostAndPort: fmt.Sprintf("%s%s", GRPC_SERVICE_NAME, ":5557"),
+			HostAndPort: fmt.Sprintf("%s.%s.%s%s", GRPC_SERVICE_NAME, dexv1Client.Namespace, "svc.cluster.local", ":5557"),
 			CABuffer:    ctls.caPEM,
 			CrtBuffer:   ctls.clientPEM,
 			KeyBuffer:   ctls.clientPrivKeyPEM,

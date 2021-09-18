@@ -22,7 +22,7 @@ const (
 
 var (
 	serialNumberLimit = new(big.Int).Lsh(big.NewInt(1), 128)
-	dns               = []string{GRPC_SERVICE_NAME}
+	dns               = []string{}
 	certDuration      = time.Hour * 24
 )
 
@@ -30,7 +30,7 @@ func GetCertDuration() time.Duration {
 	return certDuration
 }
 
-func createMTLS() (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, error) {
+func createMTLS(ns string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, error) {
 	// TODO(cdoan): handle the error, and put this into a function to reuse
 	serialNumber, _ := rand.Int(rand.Reader, serialNumberLimit)
 	ca := &x509.Certificate{
@@ -39,7 +39,7 @@ func createMTLS() (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *
 		Subject: pkix.Name{
 			Organization: []string{"Red Hat, Inc."},
 			Country:      []string{"US"},
-			CommonName:   GRPC_SERVICE_NAME,
+			CommonName:   getServiceName(ns),
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(GetCertDuration()),
@@ -66,7 +66,7 @@ func createMTLS() (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *
 		Subject: pkix.Name{
 			Organization: []string{"Red Hat, Inc."},
 			Country:      []string{"US"},
-			CommonName:   GRPC_SERVICE_NAME,
+			CommonName:   getServiceName(ns),
 		},
 		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
 		NotBefore:    time.Now(),
@@ -76,11 +76,11 @@ func createMTLS() (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 	}
 	if dns != nil {
-		dns = append(dns[:1], dns[0:]...)
+		// dns = append(dns[:1], dns[0:]...)
 		// dns[0] = CN
-		cert.DNSNames = dns
+		cert.DNSNames = []string{getServiceName(ns)}
 	} else {
-		cert.DNSNames = []string{GRPC_SERVICE_NAME}
+		cert.DNSNames = []string{getServiceName(ns)}
 	}
 
 	certPrivKey, err := rsa.GenerateKey(rand.Reader, PRIVATE_KEY_SIZE)
@@ -103,7 +103,7 @@ func createMTLS() (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *
 		Subject: pkix.Name{
 			Organization: []string{"Red Hat, Inc."},
 			Country:      []string{"US"},
-			CommonName:   GRPC_SERVICE_NAME,
+			CommonName:   getServiceName(ns),
 		},
 		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
 		NotBefore:    time.Now(),
@@ -174,6 +174,10 @@ func bufferToFile(name string, thing []byte) {
 	if err != nil {
 		fmt.Println("failed to write file: " + name)
 	}
+}
+
+func getServiceName(ns string) string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", GRPC_SERVICE_NAME, ns)
 }
 
 func verifyCACert() error {
