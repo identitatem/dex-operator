@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 
 	routev1 "github.com/openshift/api/route/v1"
@@ -729,7 +730,9 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 // https://stackoverflow.com/questions/47104454/openshift-online-v3-adding-new-route-gives-forbidden-error
 func (r *DexServerReconciler) defineRoute(m *authv1alpha1.DexServer) *routev1.Route {
 	ls := labelsForDexServer(m.Name, m.Namespace)
-	// routeHost := fmt.Sprintf("%s.apps.%s", m.Name, "pool-sno-8x32-n9kps.demo.red-chesterfield.com")
+	u, _ := url.Parse(m.Spec.Issuer)
+	routeHost := u.Host
+
 	routeSpec := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.Name,
@@ -737,7 +740,7 @@ func (r *DexServerReconciler) defineRoute(m *authv1alpha1.DexServer) *routev1.Ro
 			Labels:    ls,
 		},
 		Spec: routev1.RouteSpec{
-			// Host: routeHost,
+			Host: routeHost,
 			TLS: &routev1.TLSConfig{
 				// Termination: routev1.TLSTerminationPassthrough,
 				// Termination: routev1.TLSTerminationEdge,
