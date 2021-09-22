@@ -40,9 +40,9 @@ spec:
                 items:
                   description: ConnectorSpec defines the OIDC connector config details
                   properties:
-                    config:
-                      description: ConfigSpec describes the client id and secret.
-                        The RedirectURI should be returned?
+                    github:
+                      description: GitHubConfigSpec describes the configuration specific
+                        to the GitHub connector
                       properties:
                         clientID:
                           type: string
@@ -59,15 +59,173 @@ spec:
                                 the secret name must be unique.
                               type: string
                           type: object
+                        hostName:
+                          type: string
+                        loadAllGroups:
+                          type: boolean
                         org:
                           type: string
+                        orgs:
+                          items:
+                            description: Org holds org-team filters (GitHub), in which
+                              teams are optional.
+                            properties:
+                              name:
+                                description: Organization name in github (not slug,
+                                  full name). Only users in this github organization
+                                  can authenticate.
+                                type: string
+                              teams:
+                                description: Names of teams in a github organization.
+                                  A user will be able to authenticate if they are
+                                  members of at least one of these teams. Users in
+                                  the organization can authenticate if this field
+                                  is omitted from the config file.
+                                items:
+                                  type: string
+                                type: array
+                            required:
+                            - name
+                            type: object
+                          type: array
                         redirectURI:
-                          description: 'TODO: confirm if we set this, or allow this
-                            to be passed in?'
                           type: string
+                        rootCA:
+                          type: string
+                        teamNameField:
+                          type: string
+                        useLoginAsID:
+                          type: boolean
                       type: object
                     id:
                       type: string
+                    ldap:
+                      description: LDAPConfigSpec describes the configuration specific
+                        to the LDAP connector
+                      properties:
+                        bindDN:
+                          description: The DN for an application service account.
+                            The connector uses the bindDN and bindPW as credentials
+                            to search for users and groups. Not required if the LDAP
+                            server provides access for anonymous auth.
+                          type: string
+                        bindPWRef:
+                          description: Secret reference to the password for an application
+                            service account. The connector uses the bindDN and bindPW
+                            as credentials to search for users and groups. Not required
+                            if the LDAP server provides access for anonymous auth.
+                          properties:
+                            name:
+                              description: Name is unique within a namespace to reference
+                                a secret resource.
+                              type: string
+                            namespace:
+                              description: Namespace defines the space within which
+                                the secret name must be unique.
+                              type: string
+                          type: object
+                        groupSearch:
+                          description: Group search configuration.
+                          properties:
+                            baseDN:
+                              description: BaseDN to start the search from. For example
+                                "cn=groups,dc=example,dc=com"
+                              type: string
+                            filter:
+                              description: Optional filter to apply when searching
+                                the directory. For example "(objectClass=posixGroup)"
+                              type: string
+                            nameAttr:
+                              description: The attribute of the group that represents
+                                its name.
+                              type: string
+                            scope:
+                              type: string
+                            userMatchers:
+                              description: "Array of the field pairs used to match
+                                a user to a group. See the \"UserMatcher\" struct
+                                for the exact field names \n Each pair adds an additional
+                                requirement to the filter that an attribute in the
+                                group match the user's attribute value. For example
+                                that the \"members\" attribute of a group matches
+                                the \"uid\" of the user. The exact filter being added
+                                is: \n   (userMatchers[n].<groupAttr>=userMatchers[n].<userAttr
+                                value>)"
+                              items:
+                                description: LDAP UserMatcher holds information about
+                                  user and group matching
+                                properties:
+                                  groupAttr:
+                                    type: string
+                                  userAttr:
+                                    type: string
+                                required:
+                                - groupAttr
+                                - userAttr
+                                type: object
+                              type: array
+                          type: object
+                        host:
+                          description: The host and optional port of the LDAP server.
+                            If port isn't supplied, it will be guessed based on the
+                            TLS configuration. 389 or 636.
+                          type: string
+                        insecureNoSSL:
+                          description: Required if LDAP host does not use TLS
+                          type: boolean
+                        insecureSkipVerify:
+                          description: Connect to the insecure port then issue a StartTLS
+                            command to negotiate a secure connection. If unsupplied
+                            secure connections will use the LDAPS protocol.
+                          type: boolean
+                        rootCA:
+                          description: 'Path to a trusted root certificate file. Default:
+                            use the host''s root CA'
+                          type: string
+                        rootCAData:
+                          description: A raw certificate file can also be provided
+                            inline as a base64 encoded PEM file.
+                          format: byte
+                          type: string
+                        startTLS:
+                          description: Connect to the insecure port and then issue
+                            a StartTLS command to negotiate a secure connection. If
+                            unspecified, connections will use the ldaps:// protocol
+                          type: boolean
+                        userSearch:
+                          description: User entry search configuration.
+                          properties:
+                            baseDN:
+                              description: BaseDN to start the search from. For example
+                                "cn=users,dc=example,dc=com"
+                              type: string
+                            emailAttr:
+                              type: string
+                            filter:
+                              description: Optional filter to apply when searching
+                                the directory. For example "(objectClass=person)"
+                              type: string
+                            idAttr:
+                              description: A mapping of attributes on the user entry
+                                to claims.
+                              type: string
+                            nameAttr:
+                              type: string
+                            scope:
+                              description: 'Can either be: * "sub" - search the whole
+                                sub tree * "one" - only search one level'
+                              type: string
+                            username:
+                              description: Attribute to match against the inputted
+                                username. This will be translated and combined with
+                                the other filter as "(<attr>=<username>)".
+                              type: string
+                          type: object
+                        usernamePrompt:
+                          description: The attribute to display in the provided password
+                            prompt. If unset, will display "Username"
+                          type: string
+                      type: object
                     name:
                       type: string
                     type:

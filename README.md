@@ -49,24 +49,55 @@ This is a operator-sdk based operator to deploy and manage a Dex server instance
     quay-io-cdoan-dex-operator-bundle-v0-0-5                          1/1     Running     0          35s
     ```
 
-3. if you have not done so already, generate or collect the github oauth application information and set the appropriate environment variables. An example of a github app will have these values like this to reference the dex service :
+3. Setup for IDP connectors:
+    - **Github:**
+      If you have not done so already, generate or collect the github oauth application information and set the appropriate environment variables. An example of a github app will have these values like this to reference the dex service :
 
-    | key                         | example values format |
-    |-----------------------------|-----------------------|
-    | Application name:           | any-string |
-    | Homepage URL:               | https://dex2-dex-operator.apps.pool-sno8x32sp2-w4qpg.demo.red-chesterfield.com |
-    | Authorization callback URL: | https://dex2-dex-operator.apps.pool-sno8x32sp2-w4qpg.demo.red-chesterfield.com/callback |
+        | key                         | example values format |
+        |-----------------------------|-----------------------|
+        | Application name:           | any-string |
+        | Homepage URL:               | https://dex2-dex-operator.apps.pool-sno8x32sp2-w4qpg.demo.red-chesterfield.com |
+        | Authorization callback URL: | https://dex2-dex-operator.apps.pool-sno8x32sp2-w4qpg.demo.red-chesterfield.com/callback |
 
-    Where the URL references the location of the dex **Service**.
+        Where the URL references the location of the dex **Service**.
 
-    ```bash
-    # override your github application client id
-    export DEXSERVER_CLIENT_ID=...
-    # override your github application client secret
-    export DEXSERVER_CLIENT_SECRET=...
-    ```
+        ```bash
+        # override your github application client id
+        export DEXSERVER_GH_CLIENT_ID=...
+        # override your github application client secret
+        export DEXSERVER_GH_CLIENT_SECRET=...
+        ```
 
-4. generate the minimal set of manifests for github OAUTH application authentication
+    - **LDAP:**
+        Follow the steps [here](https://medium.com/ibm-garage/how-to-host-and-deploy-an-openldap-sever-in-openshift-affab06a4365) to setup an OpenLDAP instance.
+        Override the following environment variables:
+        ```bash
+        # LDAP Host
+        export DEXSERVER_LDAP_HOST=...
+        # LDAP Bind DN 
+        export DEXSERVER_LDAP_BIND_DN=...
+        # LDAP Bind PW (The bindDN and bindPW are used as credentials to search for users and passwords)
+        export DEXSERVER_LDAP_SECRET=...
+        # Base DN to start the search from
+        export DEXSERVER_LDAP_USERSEARCH_BASEDN=...
+        ```
+        Populate the LDAP server with some sample data. For example:
+        ```
+        ldapadd -H ldap://<ldap_server_url> -D "cn=Manager,dc=example,dc=com" -W << EOF
+        heredoc> dn: cn=jane,dc=example,dc=com
+        heredoc> objectClass: person
+        heredoc> objectClass: inetOrgPerson
+        heredoc> sn: doe
+        heredoc> cn: jane
+        heredoc> mail: janedoe@example.com
+        heredoc> userpassword: foo
+        heredoc> EOF
+        Enter LDAP Password:
+        adding new entry "cn=jane,dc=example,dc=com"
+        ```
+        You can make additional modifications as needed to the LDAP connector configuration in the DexServer manifest definition in `hack/generate_cr.sh`
+
+4. generate the minimal set of manifests for github OAUTH application and LDAP authentication
 
     ```bash
     cd hack
@@ -97,7 +128,7 @@ This is a operator-sdk based operator to deploy and manage a Dex server instance
    oc get oauth2clients -A
    ```
 
-9. apply the OAUTH changes
+9.  apply the OAUTH changes
 
     ```bash
     oc apply -f hack/demo-oauth.yaml
