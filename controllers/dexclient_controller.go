@@ -207,16 +207,19 @@ func isMTLSSecretNotExists(r *DexClientReconciler, m *authv1alpha1.DexClient, ct
 }
 
 func getClientClientSecretFromRef(r *DexClientReconciler, m *authv1alpha1.DexClient, ctx context.Context) (string, error) {
-
+	log := ctrllog.FromContext(ctx)
 	secretName := m.Spec.ClientSecretRef.Name
 	secretNamespace := m.Spec.ClientSecretRef.Namespace
+	log.Info("getClientClientSecretFromRef", "secretName", secretName, "secretNamespace", "secretNamespace")
 
 	resource := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil {
 		return "", err
 	}
 
+	log.Info("retrieve clientSecret in ", "secretName", secretName, "secretNamespace", "secretNamespace")
 	if secret, ok := resource.Data["clientSecret"]; ok {
+		log.Info("found clientSecret in ", "secretName", secretName, "secretNamespace", "secretNamespace")
 		return string(secret), nil
 	}
 	return "", fmt.Errorf("secret %s/%s doesn't contain the data clientSecret", secretNamespace, secretName)
