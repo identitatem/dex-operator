@@ -216,9 +216,8 @@ func getClientClientSecretFromRef(r *DexClientReconciler, m *authv1alpha1.DexCli
 		return "", err
 	}
 
-	var secret string
 	if secret, ok := resource.Data["clientSecret"]; ok {
 		return string(secret), nil
 	}
-	return "", fmt.Errorf("secret %s/%s doesn't contain the data clientSecret", secretNamespace, secret)
+	return "", fmt.Errorf("secret %s/%s doesn't contain the data clientSecret", secretNamespace, secretName)
 }
