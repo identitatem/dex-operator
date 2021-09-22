@@ -212,7 +212,7 @@ func getClientClientSecretFromRef(r *DexClientReconciler, m *authv1alpha1.DexCli
 	secretNamespace := m.Spec.ClientSecretRef.Namespace
 
 	resource := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
+	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil {
 		return "", err
 	}
 
