@@ -691,7 +691,7 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 				ClientID:     connector.Config.ClientID,
 				ClientSecret: clientSecret,
 				RedirectURI:  connector.Config.RedirectURI,
-				Org:          "kubernetes",
+				Org:          connector.Config.Org,
 			},
 		}
 		configYamlData.Connectors = append(configYamlData.Connectors, newConnector)
