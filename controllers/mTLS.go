@@ -75,13 +75,8 @@ func createMTLS(ns string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 	}
-	if dns != nil {
-		// dns = append(dns[:1], dns[0:]...)
-		// dns[0] = CN
-		cert.DNSNames = []string{getServiceName(ns)}
-	} else {
-		cert.DNSNames = []string{getServiceName(ns)}
-	}
+
+	cert.DNSNames = []string{getServiceName(ns)}
 
 	certPrivKey, err := rsa.GenerateKey(rand.Reader, PRIVATE_KEY_SIZE)
 	if err != nil {

@@ -8,26 +8,40 @@ export APPS=$(oc get infrastructure cluster -ojsonpath='{.status.apiServerURL}' 
 export OAUTH_CLIENT_SECRET_NAME=cluster1-clientsecret
 
 export DEXSERVER_CLIENT_NAME=${NAME}
-export DEXSERVER_CLIENT_SECRET_NAME=${NAME}-dexserver-client-secret
-export DEXSERVER_CLIENT_ID=${DEXSERVER_CLIENT_ID:-"dexserverclientid"}
-export DEXSERVER_CLIENT_SECRET=${DEXSERVER_CLIENT_SECRET:-"dexserversecret123456"}
+export DEXSERVER_GH_CLIENT_SECRET_NAME=${NAME}-dexserver-client-secret
+export DEXSERVER_GH_CLIENT_ID=${DEXSERVER_GH_CLIENT_ID:-"dexserverclientid"}
+export DEXSERVER_GH_CLIENT_SECRET=${DEXSERVER_GH_CLIENT_SECRET:-"dexserversecret123456"}
 
 export DEXCLIENT_NAME=dexclient-cluster2
 export DEXCLIENT_SECRET_NAME=dexclient-client-secret
 export DEXCLIENT_ID=dexclientcluster2clientid
 export DEXCLIENT_SECRET=dexclientsecret123456
 
+export DEXSERVER_LDAP_HOST=${DEXSERVER_LDAP_HOST:-"adf558f301d884463a9d44329fbafc4c-145647244.us-east-1.elb.amazonaws.com:636"}
+export DEXSERVER_LDAP_SECRET_NAME=${DEXSERVER_LDAP_SECRET_NAME:-"ldap-bindpw"}
+export DEXSERVER_LDAP_SECRET=${DEXSERVER_LDAP_SECRET:-"admin"}
+export DEXSERVER_LDAP_BIND_DN=${DEXSERVER_LDAP_BIND_DN:-"cn=Manager,dc=example,dc=com"}
+export DEXSERVER_LDAP_USERSEARCH_BASEDN=${DEXSERVER_LDAP_USERSEARCH_BASEDN:-"dc=example,dc=com"}
 
 cat > demo-dexserver-${NAME}-${NS}.yaml <<EOF
 ---
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ${DEXSERVER_CLIENT_SECRET_NAME}
+  name: ${DEXSERVER_GH_CLIENT_SECRET_NAME}
   namespace: ${SECRET_NS}
 type: Opaque
 stringData:
-  clientSecret: ${DEXSERVER_CLIENT_SECRET}
+  clientSecret: ${DEXSERVER_GH_CLIENT_SECRET}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${DEXSERVER_LDAP_SECRET_NAME}
+  namespace: ${SECRET_NS}
+type: Opaque
+stringData:
+  bindPW: ${DEXSERVER_LDAP_SECRET}
 ---
 apiVersion: auth.identitatem.io/v1alpha1
 kind: DexServer
@@ -71,12 +85,31 @@ spec:
   - type: github
     id: github
     name: github
-    config:
-      clientID: "${DEXSERVER_CLIENT_ID}"
+    github:
+      clientID: "${DEXSERVER_GH_CLIENT_ID}"
       clientSecretRef:
-        name: ${DEXSERVER_CLIENT_SECRET_NAME}
+        name: ${DEXSERVER_GH_CLIENT_SECRET_NAME}
         namespace: ${NS}
       redirectURI: "https://${NAME}-${NS}.${APPS}/callback"
+  - type: ldap
+    id: ldap
+    name: OpenLDAP
+    ldap:
+      host: ${DEXSERVER_LDAP_HOST}
+      insecureNoSSL: false
+      insecureSkipVerify: true
+      bindDN: ${DEXSERVER_LDAP_BIND_DN}
+      bindPWRef:
+        name: ${DEXSERVER_LDAP_SECRET_NAME}
+        namespace: ${NS}
+      usernamePrompt: Email Address
+      userSearch:
+        baseDN: ${DEXSERVER_LDAP_USERSEARCH_BASEDN}
+        filter: "(objectClass=person)"
+        username: mail
+        idAttr: DN
+        emailAttr: mail
+        nameAttr: cn      
 EOF
 
 # DEX CLIENT

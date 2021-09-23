@@ -84,7 +84,7 @@ metadata:
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.12.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: dex-operator.v0.0.11
+  name: dex-operator.v0.0.2
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -327,7 +327,7 @@ spec:
                 env:
                 - name: RELATED_IMAGE_DEX
                   value: quay.io/dexidp/dex:v2.28.1
-                image: quay.io/cdoan/dex-operator:0.0.11
+                image: quay.io/vnambiar/dex-operator:0.0.2
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -412,4 +412,4 @@ spec:
   provider:
     name: redhat.com
     url: redhat.com
-  version: 0.0.11
+  version: 0.0.2
