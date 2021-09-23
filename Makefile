@@ -5,6 +5,16 @@
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.0.1
 
+# set docker image tag to branch name or "latest" if "master" or "main" branch
+GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
+IMG_TAG = ${GIT_BRANCH}
+ifeq ("main",${IMG_TAG})
+IMG_TAG = latest
+endif
+ifeq ("master",${IMG_TAG})
+IMG_TAG = latest
+endif
+
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
 # To re-generate a bundle for other specific channels without changing the standard setup, you can:
@@ -33,11 +43,11 @@ IMAGE_TAG_BASE ?= identitatem.io/dex-operator
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
-BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
+BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(IMG_TAG)
 
 # Image URL to use all building/pushing image targets
 # IMG ?= controller:latest
-IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
+IMG ?= $(IMAGE_TAG_BASE):$(IMG_TAG)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
