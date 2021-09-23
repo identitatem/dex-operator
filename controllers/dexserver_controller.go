@@ -290,6 +290,16 @@ func getConnectorSecretFromRef(connector v1alpha1.ConnectorSpec, m *authv1alpha1
 			return "", err
 		}
 		return string(resource.Data["clientSecret"]), nil
+	case authv1alpha1.ConnectorTypeMicrosoft:
+		secretName = connector.Microsoft.ClientSecretRef.Name
+		if secretNamespace = connector.Microsoft.ClientSecretRef.Namespace; secretNamespace == "" {
+			secretNamespace = m.Namespace
+		}
+		resource := &corev1.Secret{}
+		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
+			return "", err
+		}
+		return string(resource.Data["clientSecret"]), nil
 	case authv1alpha1.ConnectorTypeLDAP:
 		secretName = connector.LDAP.BindPWRef.Name
 		if secretNamespace = connector.LDAP.BindPWRef.Namespace; secretNamespace == "" {
@@ -614,16 +624,23 @@ type DexGrpcSpec struct {
 }
 
 type DexConnectorConfigSpec struct {
+	// Common fields between GitHub and Microsoft OAuth2 configuration
+	ClientID     string `yaml:"clientID,omitempty"`
+	ClientSecret string `yaml:"clientSecret,omitempty"`
+	RedirectURI  string `yaml:"redirectURI,omitempty"`
+
 	// Github configuration
-	ClientID      string             `json:"clientID,omitempty"`
-	ClientSecret  string             `json:"clientSecret,omitempty"`
-	RedirectURI   string             `json:"redirectURI,omitempty"`
-	Org           string             `json:"org,omitempty"`
-	Orgs          []authv1alpha1.Org `json:"orgs,omitempty"`
-	HostName      string             `json:"hostName,omitempty"`
-	TeamNameField string             `json:"teamNameField,omitempty"`
-	LoadAllGroups bool               `json:"loadAllGroups,omitempty"`
-	UseLoginAsID  bool               `json:"useLoginAsID,omitempty"`
+	Org           string             `yaml:"org,omitempty"`
+	Orgs          []authv1alpha1.Org `yaml:"orgs,omitempty"`
+	HostName      string             `yaml:"hostName,omitempty"`
+	TeamNameField string             `yaml:"teamNameField,omitempty"`
+	LoadAllGroups bool               `yaml:"loadAllGroups,omitempty"`
+	UseLoginAsID  bool               `yaml:"useLoginAsID,omitempty"`
+
+	// Microsoft configuration
+	Tenant             string   `yaml:"tenant,omitempty"`
+	OnlySecurityGroups bool     `yaml:"onlySecurityGroups,omitempty"`
+	Groups             []string `yaml:"groups,omitempty"`
 
 	// LDAP configuration
 	Host               string                       `yaml:"host,omitempty"`
@@ -727,6 +744,26 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 					ClientSecret: clientSecret,
 					RedirectURI:  connector.GitHub.RedirectURI,
 					Org:          connector.GitHub.Org,
+				},
+			}
+		case authv1alpha1.ConnectorTypeMicrosoft:
+			// Get Microsoft ClientSecret from SecretRef
+			clientSecret, err := getConnectorSecretFromRef(connector, m, r, ctx)
+
+			if err != nil {
+				log.Error(err, "Error getting client secret")
+				return nil
+			}
+
+			newConnector = DexConnectorSpec{
+				Type: string(authv1alpha1.ConnectorTypeMicrosoft),
+				Id:   connector.Id,
+				Name: connector.Name,
+				Config: DexConnectorConfigSpec{
+					ClientID:     connector.Microsoft.ClientID,
+					ClientSecret: clientSecret,
+					RedirectURI:  connector.Microsoft.RedirectURI,
+					Tenant:       connector.Microsoft.Tenant,
 				},
 			}
 		case authv1alpha1.ConnectorTypeLDAP:

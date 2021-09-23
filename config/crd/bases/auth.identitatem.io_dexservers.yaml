@@ -226,12 +226,51 @@ spec:
                             prompt. If unset, will display "Username"
                           type: string
                       type: object
+                    microsoft:
+                      description: MicrosoftConfigSpec describes the configuration
+                        specific to the Microsoft connector
+                      properties:
+                        clientID:
+                          type: string
+                        clientSecretRef:
+                          description: SecretReference represents a Secret Reference.
+                            It has enough information to retrieve secret in any namespace
+                          properties:
+                            name:
+                              description: Name is unique within a namespace to reference
+                                a secret resource.
+                              type: string
+                            namespace:
+                              description: Namespace defines the space within which
+                                the secret name must be unique.
+                              type: string
+                          type: object
+                        groups:
+                          items:
+                            type: string
+                          type: array
+                        onlySecurityGroups:
+                          description: When the groups claim is present in a request
+                            to dex and tenant is configured, dex will query Microsoft
+                            API to obtain a list of groups the user is a member of.
+                            onlySecurityGroups configuration option restricts the
+                            list to include only security groups. By default all groups
+                            (security, Office 365, mailing lists) are included.
+                          type: boolean
+                        redirectURI:
+                          type: string
+                        tenant:
+                          description: groups claim in dex is only supported when
+                            tenant is specified in Microsoft connector config.
+                          type: string
+                      type: object
                     name:
                       type: string
                     type:
                       enum:
                       - github
                       - ldap
+                      - microsoft
                       type: string
                   type: object
                 type: array

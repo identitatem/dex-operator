@@ -8,9 +8,14 @@ export APPS=$(oc get infrastructure cluster -ojsonpath='{.status.apiServerURL}' 
 export OAUTH_CLIENT_SECRET_NAME=cluster1-clientsecret
 
 export DEXSERVER_CLIENT_NAME=${NAME}
-export DEXSERVER_GH_CLIENT_SECRET_NAME=${NAME}-dexserver-client-secret
+export DEXSERVER_GH_CLIENT_SECRET_NAME=${NAME}-dexserver-gh-client-secret
 export DEXSERVER_GH_CLIENT_ID=${DEXSERVER_GH_CLIENT_ID:-"dexserverclientid"}
 export DEXSERVER_GH_CLIENT_SECRET=${DEXSERVER_GH_CLIENT_SECRET:-"dexserversecret123456"}
+
+export DEXSERVER_MS_CLIENT_SECRET_NAME=${NAME}-dexserver-ms-client-secret
+export DEXSERVER_MS_CLIENT_ID=${DEXSERVER_MS_CLIENT_ID:-"dexservermsclientid"}
+export DEXSERVER_MS_CLIENT_SECRET=${DEXSERVER_MS_CLIENT_SECRET:-"dexservermssecret123456"}
+export DEXSERVER_MS_TENANT=${DEXSERVER_MS_TENANT:-"organizations"}
 
 export DEXCLIENT_NAME=dexclient-cluster2
 export DEXCLIENT_SECRET_NAME=dexclient-client-secret
@@ -33,6 +38,15 @@ metadata:
 type: Opaque
 stringData:
   clientSecret: ${DEXSERVER_GH_CLIENT_SECRET}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${DEXSERVER_MS_CLIENT_SECRET_NAME}
+  namespace: ${SECRET_NS}
+type: Opaque
+stringData:
+  clientSecret: ${DEXSERVER_MS_CLIENT_SECRET}
 ---
 apiVersion: v1
 kind: Secret
@@ -91,6 +105,16 @@ spec:
         name: ${DEXSERVER_GH_CLIENT_SECRET_NAME}
         namespace: ${NS}
       redirectURI: "https://${NAME}-${NS}.${APPS}/callback"
+  - type: microsoft
+    id: microsoft
+    name: microsoft
+    microsoft:
+      clientID: "${DEXSERVER_MS_CLIENT_ID}"
+      clientSecretRef:
+        name: ${DEXSERVER_MS_CLIENT_SECRET_NAME}
+        namespace: ${NS}
+      redirectURI: "https://${NAME}-${NS}.${APPS}/callback"
+      tenant: ${DEXSERVER_MS_TENANT}     
   - type: ldap
     id: ldap
     name: OpenLDAP
