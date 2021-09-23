@@ -727,6 +727,7 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 					ClientSecret: clientSecret,
 					RedirectURI:  connector.GitHub.RedirectURI,
 					Org:          connector.GitHub.Org,
+					Orgs:         connector.GitHub.Orgs,
 				},
 			}
 		case authv1alpha1.ConnectorTypeLDAP:
