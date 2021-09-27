@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ .DexServer.Name }}"
+  namespace: "{{ .DexServer.Namespace }}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "{{ .DexServer.Name }}"
+      dexconfig_name: "{{ .DexServer.Name }}"
+      dexconfig_namespace: "{{ .DexServer.Namespace }}"
+  template:
+    metadata:
+      labels:
+        app: "{{ .DexServer.Name }}"
+        dexconfig_name: "{{ .DexServer.Name }}"
+        dexconfig_namespace: "{{ .DexServer.Namespace }}"
+    spec:
+      containers:
+      - command:
+        - /usr/local/bin/dex
+        - serve
+        - /etc/dex/cfg/config.yaml
+        env:
+        - name: KUBERNETES_POD_NAMESPACE
+          value: "{{ .DexServer.Namespace }}"
+        image: "{{ .DexImage }}"
+        imagePullPolicy: Always
+        name: "{{ .DexServer.Name }}"
+        ports:
+        - containerPort: 5556
+          name: https
+          protocol: TCP
+        - containerPort: 5557
+          name: grpc
+          protocol: TCP
+        resources: {}
+        volumeMounts:
+        - mountPath: /etc/dex/cfg
+          name: config
+        - mountPath: /etc/dex/tls
+          name: tls
+        - mountPath: /etc/dex/mtls
+          name: mtls
+      serviceAccountName: "{{ .ServiceAccountName }}"
+      volumes:
+      - configMap:
+          items:
+          - key: config.yaml
+            path: config.yaml
+          name: "{{ .DexServer.Name }}"
+        name: config
+      - name: tls
+        secret:
+          secretName: "{{ .TlsSecretName }}"
+      - name: mtls
+        secret:
+          secretName: "{{ .MtlsSecretName }}"

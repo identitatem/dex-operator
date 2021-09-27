@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  labels:
+    app: "{{ .DexServer.Name }}"
+    dexconfig_name: "{{ .DexServer.Name }}"
+    dexconfig_namespace: "{{ .DexServer.Namespace }}"
+  name: "{{ .DexServer.Name }}"
+  namespace: "{{ .DexServer.Namespace }}"
+  annotations:
+    route.openshift.io/termination: "reencrypt"
+spec:
+  rules:
+  - host: "{{ .Host }}"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: "{{ .DexServer.Name }}"
+            port:
+              number: 5556

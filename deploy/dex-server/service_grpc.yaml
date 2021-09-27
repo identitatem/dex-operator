@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+  labels:
+    app: "{{ .DexServer.Name }}"
+  name: "{{ .GrpcServiceName }}"
+  namespace: "{{ .DexServer.Namespace }}"
+spec:
+  ports:
+  - name: grpc
+    port: 5557
+    protocol: TCP
+    targetPort: 5557
+  selector:
+    app: "{{ .DexServer.Name }}"
+  type: ClusterIP

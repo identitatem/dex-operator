@@ -105,8 +105,11 @@ func main() {
 	}
 
 	if err = (&controllers.DexServerReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:             mgr.GetClient(),
+		KubeClient:         kubernetes.NewForConfigOrDie(ctrl.GetConfigOrDie()),
+		DynamicClient:      dynamic.NewForConfigOrDie(ctrl.GetConfigOrDie()),
+		APIExtensionClient: apiextensionsclient.NewForConfigOrDie(ctrl.GetConfigOrDie()),
+		Scheme:             mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "DexServer")
 		os.Exit(1)

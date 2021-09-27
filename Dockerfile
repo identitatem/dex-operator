@@ -20,6 +20,7 @@ COPY pkg/ pkg/
 COPY config/resources.go config/resources.go
 COPY config/rbac/ config/rbac/
 COPY config/crd/bases/ config/crd/bases/
+COPY deploy/ deploy/
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go

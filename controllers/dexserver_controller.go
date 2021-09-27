@@ -24,21 +24,25 @@ import (
 	"os"
 
 	"github.com/ghodss/yaml"
-	routev1 "github.com/openshift/api/route/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+	clusteradmapply "open-cluster-management.io/clusteradm/pkg/helpers/apply"
+	"open-cluster-management.io/clusteradm/pkg/helpers/asset"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/identitatem/dex-operator/api/v1alpha1"
 	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
+	deploy "github.com/identitatem/dex-operator/deploy"
 )
 
 const (
@@ -51,8 +55,7 @@ const (
 )
 
 var (
-	apiGV = authv1alpha1.GroupVersion.String()
-	ctls  ClientTLS
+	ctls ClientTLS
 )
 
 type ClientTLS struct {
@@ -64,7 +67,10 @@ type ClientTLS struct {
 // DexServerReconciler reconciles a DexServer object
 type DexServerReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	KubeClient         kubernetes.Interface
+	DynamicClient      dynamic.Interface
+	APIExtensionClient apiextensionsclient.Interface
+	Scheme             *runtime.Scheme
 }
 
 //+kubebuilder:rbac:groups=auth.identitatem.io,resources=dexservers,verbs=get;list;watch;create;update;patch;delete
@@ -93,184 +99,84 @@ type DexServerReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
-	log.Info("Reconciling...")
+	log.V(1).Info("Reconciling...")
+
+	// Fetch the DexServer instance
 	dexServer := &authv1alpha1.DexServer{}
-	if err := r.Get(ctx, req.NamespacedName, dexServer); err != nil {
+	if err := r.Client.Get(
+		ctx,
+		req.NamespacedName,
+		dexServer,
+	); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	switch {
 
-	case isNotDefinedMTLSSecret(dexServer, r, ctx):
+	// Prepare Mutual TLS for dex client to server connection
+	// TODO: Revisit this once cdoan finishes his multiple server refactor
+	if isNotDefinedMTLSSecret(dexServer, r, ctx) {
 		caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM, err := createMTLS(dexServer.Namespace)
 		if err != nil {
-			log.Info("failed to generate ca, cert and key")
+			log.Error(err, "failed to generate ca, cert and key")
 			return ctrl.Result{}, err
 		}
 		spec := r.defineSecret(dexServer, caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM)
 		log.Info("Creating a new Secret", "Secret.Namespace", spec.Namespace, "Secret.Name", spec.Name)
 		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create Secret", "Secret.Name", spec.Name)
+			log.Error(err, "failed to create Secret", "Secret.Name", spec.Name)
 			return ctrl.Result{}, err
 		}
 		ctls.caPEM = caPEM
 		ctls.clientPEM = clientPEM
 		ctls.clientPrivKeyPEM = clientPrivKeyPEM
-		return ctrl.Result{Requeue: true}, nil
-
-	case isNotDefinedConfigmap(dexServer, r, ctx):
-		spec := r.defineConfigMap(dexServer, ctx)
-		log.Info("Creating a new ConfigMap", "ConfigMap.Namespace", spec.Namespace, "ConfigMap.Name", spec.Name)
-		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create configmap", "ConfigMap.Name", spec.Name)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{Requeue: true}, nil
-
-	case isNotDefinedService(dexServer, r, ctx):
-		spec := r.defineService(dexServer)
-		log.Info("Creating a new Service", "Service.Namespace", spec.Namespace, "Service.Name", spec.Name)
-		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create service", "Service.Name", spec.Name)
-			return ctrl.Result{}, err
-		}
-		specGrpc := r.defineServiceGrpc(dexServer)
-		log.Info("Creating a new Service", "Service.Namespace", specGrpc.Namespace, "Service.Name", specGrpc.Name)
-		if err := r.Create(ctx, specGrpc); err != nil {
-			log.Info("failed to create grpc service", "Service.Name", specGrpc.Name)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{Requeue: true}, nil
-
-	case isNotDefinedServiceAccount(dexServer, r, ctx):
-		spec := r.defineServiceAccount(dexServer)
-		log.Info("Creating a new ServiceAccount", "ServiceAccount.Namespace", spec.Namespace, "ServiceAccount.Name", spec.Name)
-		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create ServiceAccount", "ServiceAccount.Name", SERVICE_ACCOUNT_NAME)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{Requeue: true}, nil
-
-	case isNotDefinedClusterRole(dexServer, r, ctx):
-		spec := r.defineClusterRole(dexServer)
-		log.Info("Creating a new ClusterRole", "ClusterRole.Name", spec.Name)
-		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create ClusterRole", "ClusterRole.Name", spec.Name)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{Requeue: true}, nil
-
-	case isNotDefinedClusterRoleBinding(dexServer, r, ctx):
-		spec := r.defineClusterRoleBinding(dexServer)
-		log.Info("Creating a new ClusterRoleBinding", "ClusterRoleBinding.Name", spec.Name)
-		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create ClusterRoleBinding", "ClusterRoleBinding.Name", spec.Name)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{Requeue: true}, nil
-
-	case isNotDefinedDeployment(dexServer, r, ctx):
-		spec, err := r.defineDeployment(dexServer)
-		if err != nil {
-			log.Error(err, "Error creating deployment definition")
-			return ctrl.Result{}, err
-		}
-		log.Info("Creating a new Deployment", "Deployment.Namespace", spec.Namespace, "Deployment.Name", spec.Name)
-		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create deployment", "Deployment.Name", spec.Name)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{Requeue: true}, nil
-
-	case isNotDefinedRoute(dexServer, r, ctx):
-		spec := r.defineRoute(dexServer)
-		log.Info("Creating a new Route", "Route.Namespace", spec.Namespace, "Route.Name", spec.Name)
-		if err := r.Create(ctx, spec); err != nil {
-			log.Info("failed to create Route", "Route.Name", spec.Name)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{Requeue: true}, nil
-
-	// TODO(cdoan): check CA or CERT renew?
-	default:
-		log.Info("dexServer started and NOT finished")
 	}
 
+	if err := r.syncConfigMap(dexServer, ctx); err != nil {
+		log.Error(err, "failed to sync ConfigMap")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.syncService(dexServer, ctx); err != nil {
+		log.Error(err, "failed to sync http Service")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.syncServiceGrpc(dexServer, ctx); err != nil {
+		log.Error(err, "failed to sync grpc Service")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.syncServiceAccount(dexServer, ctx); err != nil {
+		log.Error(err, "failed to sync ServiceAccount")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.syncClusterRole(dexServer, ctx); err != nil {
+		log.Error(err, "failed to sync ClusterRole")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.syncClusterRoleBinding(dexServer, ctx); err != nil {
+		log.Error(err, "failed to sync ClusterRoleBinding")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.syncDeployment(dexServer, ctx); err != nil {
+		log.Error(err, "failed to sync Deployment")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.syncIngress(dexServer, ctx); err != nil {
+		log.Error(err, "failed to sync Ingress")
+		return ctrl.Result{}, err
+	}
+
+	// // TODO(cdoan): check CA or CERT renew?
 	return ctrl.Result{}, nil
 }
 
 func isNotDefinedMTLSSecret(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
 	resource := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(SECRET_MTLS_NAME), Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
-		return true
-	}
-	return false
-}
-
-func isNotDefinedRoute(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
-	resource := &routev1.Route{}
-	if err := r.Get(ctx, types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
-		return true
-	}
-	return false
-}
-
-func isNotDefinedServiceAccount(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
-	resource := &corev1.ServiceAccount{}
-	// if err := r.Get(ctx, types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
-	if err := r.Get(ctx, types.NamespacedName{Name: SERVICE_ACCOUNT_NAME, Namespace: m.Namespace}, resource); err != nil {
-		// Sonarcloud does not like both branches returning true
-		//		if errors.IsNotFound(err) {
-		//			return true
-		//		} else {
-		//			return true
-		///		}
-		return true
-	}
-	return false
-}
-
-func isNotDefinedClusterRole(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
-	resource := &rbacv1.ClusterRole{}
-	if err := r.Get(ctx, types.NamespacedName{Name: SERVICE_ACCOUNT_NAME}, resource); err != nil {
-		return true
-	}
-	return false
-}
-
-func isNotDefinedClusterRoleBinding(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
-	resource := &rbacv1.ClusterRoleBinding{}
-	if err := r.Get(ctx, types.NamespacedName{Name: SERVICE_ACCOUNT_NAME + "-" + m.Namespace}, resource); err != nil {
-		return true
-	}
-	return false
-}
-
-func isNotDefinedDeployment(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
-	resource := &appsv1.Deployment{}
-	if err := r.Get(ctx, types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
-		return true
-	}
-	return false
-}
-
-func isNotDefinedService(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
-	resource := &corev1.Service{}
-	if err := r.Get(ctx, types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
-		return true
-	}
-	return false
-}
-
-func isNotDefinedConfigmap(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
-	resource := &corev1.ConfigMap{}
-	if err := r.Get(ctx, types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
-		// spec := r.defineConfigMap(m)
-		// log.Info("Creating a new ConfigMap", "ConfigMap.Namespace", spec.Namespace, "ConfigMap.Name", spec.Name)
-		// if err = r.Create(ctx, spec); err != nil {
-		// 	log.Debug("failed to create configmap", spec.Name)
-		// 	return false
-		// }
-		// return true
 		return true
 	}
 	return false
@@ -340,75 +246,82 @@ func (r *DexServerReconciler) defineSecret(m *authv1alpha1.DexServer, caPEM, caP
 	return secretSpec
 }
 
-func (r *DexServerReconciler) defineServiceAccount(m *authv1alpha1.DexServer) *corev1.ServiceAccount {
-	labels := map[string]string{
-		"app": m.Name,
+func (r *DexServerReconciler) syncServiceAccount(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
+	log := ctrllog.FromContext(ctx)
+	log.Info("syncServiceAccount", "ServiceAccount.Name", SERVICE_ACCOUNT_NAME)
+
+	values := struct {
+		ServiceAccountName string
+		DexServer          *authv1alpha1.DexServer
+	}{
+		ServiceAccountName: SERVICE_ACCOUNT_NAME,
+		DexServer:          dexServer,
 	}
-	serviceAccountSpec := &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      SERVICE_ACCOUNT_NAME,
-			Namespace: m.Namespace,
-			Labels:    labels,
-		},
+
+	files := []string{
+		"dex-server/service_account.yaml",
 	}
-	ctrl.SetControllerReference(m, serviceAccountSpec, r.Scheme)
-	return serviceAccountSpec
+
+	applier, readerDeploy := r.getApplierAndReader(dexServer)
+	_, err := applier.ApplyDirectly(readerDeploy, values, false, "", files...)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (r *DexServerReconciler) defineClusterRole(m *authv1alpha1.DexServer) *rbacv1.ClusterRole {
-	clusterRoleSpec := &rbacv1.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: SERVICE_ACCOUNT_NAME,
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				Resources: []string{
-					"*",
-				},
-				Verbs: []string{
-					"*",
-				},
-				APIGroups: []string{
-					"dex.coreos.com",
-				},
-			},
-			{
-				Resources: []string{
-					"customresourcedefinitions",
-				},
-				Verbs: []string{
-					"create",
-				},
-				APIGroups: []string{
-					"apiextensions.k8s.io",
-				},
-			},
-		},
+func (r *DexServerReconciler) syncClusterRole(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
+	log := ctrllog.FromContext(ctx)
+	log.Info("syncClusterRole", "ClusterRole.Name", SERVICE_ACCOUNT_NAME)
+
+	values := struct {
+		ClusterRoleName string
+	}{
+		ClusterRoleName: SERVICE_ACCOUNT_NAME,
 	}
-	ctrl.SetControllerReference(m, clusterRoleSpec, r.Scheme)
-	return clusterRoleSpec
+
+	files := []string{
+		"dex-server/cluster_role.yaml",
+	}
+
+	applier, readerDeploy := r.getApplierAndReader(dexServer)
+	_, err := applier.ApplyDirectly(readerDeploy, values, false, "", files...)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (r *DexServerReconciler) defineClusterRoleBinding(m *authv1alpha1.DexServer) *rbacv1.ClusterRoleBinding {
-	clusterRoleBindingSpec := &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: SERVICE_ACCOUNT_NAME + "-" + m.Namespace,
-		},
-		RoleRef: rbacv1.RoleRef{
-			Kind:     "ClusterRole",
-			Name:     SERVICE_ACCOUNT_NAME,
-			APIGroup: "rbac.authorization.k8s.io",
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      SERVICE_ACCOUNT_NAME,
-				Namespace: m.Namespace,
-			},
-		},
+func (r *DexServerReconciler) syncClusterRoleBinding(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
+	log := ctrllog.FromContext(ctx)
+	clusterRoleBindingName := SERVICE_ACCOUNT_NAME + "-" + dexServer.Namespace
+	log.Info("syncClusterRoleBinding", "ClusterRoleBinding.Name", clusterRoleBindingName)
+
+	values := struct {
+		ClusterRoleName        string
+		ServiceAccountName     string
+		ClusterRoleBindingName string
+		DexServer              *authv1alpha1.DexServer
+	}{
+		ClusterRoleName:        SERVICE_ACCOUNT_NAME,
+		ServiceAccountName:     SERVICE_ACCOUNT_NAME,
+		ClusterRoleBindingName: clusterRoleBindingName,
+		DexServer:              dexServer,
 	}
-	ctrl.SetControllerReference(m, clusterRoleBindingSpec, r.Scheme)
-	return clusterRoleBindingSpec
+
+	files := []string{
+		"dex-server/cluster_role_binding.yaml",
+	}
+
+	applier, readerDeploy := r.getApplierAndReader(dexServer)
+	_, err := applier.ApplyDirectly(readerDeploy, values, false, "", files...)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getDexImagePullSpec() (string, error) {
@@ -420,182 +333,104 @@ func getDexImagePullSpec() (string, error) {
 }
 
 // Defines the dex instance (dex server).
-func (r *DexServerReconciler) defineDeployment(m *authv1alpha1.DexServer) (*appsv1.Deployment, error) {
-	ls := labelsForDexServer(m.Name, m.Namespace)
+func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
 	dexImage, err := getDexImagePullSpec()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	// replicas := m.Spec.Size
-	var replicas int32 = 1
+	log := ctrllog.FromContext(ctx)
+	log.Info("syncDeployment", "DexImage", dexImage)
 
-	dep := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Name,
-			Namespace: m.Namespace,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: ls,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: ls,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Command: []string{
-							"/usr/local/bin/dex",
-							"serve",
-							"/etc/dex/cfg/config.yaml",
-						},
-						Image:           dexImage,
-						ImagePullPolicy: corev1.PullAlways,
-						Name:            m.Name,
-						Env: []corev1.EnvVar{
-							{
-								// FIX: failed to initialize storage: failed to inspect service account token:
-								//      jwt claim "kubernetes.io/serviceaccount/namespace" not found
-								Name:  "KUBERNETES_POD_NAMESPACE",
-								Value: m.Namespace,
-							},
-						},
-						Ports: []corev1.ContainerPort{
-							{
-								ContainerPort: 5556,
-								Name:          "https",
-							}, {
-								ContainerPort: 5557,
-								Name:          "grpc",
-							},
-						},
-						Resources: getDexResources(m),
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name:      "config", // the dex config.yaml
-								MountPath: "/etc/dex/cfg",
-							},
-							{
-								Name:      "tls",
-								MountPath: "/etc/dex/tls",
-							},
-							{
-								Name:      "mtls",
-								MountPath: "/etc/dex/mtls",
-							},
-						},
-					}},
-					Volumes: []corev1.Volume{
-						{
-							Name: "config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: m.Name,
-									},
-									Items: []corev1.KeyToPath{
-										{
-											Key:  "config.yaml",
-											Path: "config.yaml",
-										},
-									},
-								},
-							},
-						},
-						{
-							Name: "tls",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									// this secret is generated using service serving certificate via service annotation
-									// service.beta.openshift.io/serving-cert-secret-name: m.Name-tls-secret
-									SecretName: fmt.Sprintf(m.Name + SECRET_WEB_TLS_SUFFIX),
-								},
-							},
-						},
-						{
-							Name: "mtls",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									// This secret is generated by this controller, here we load the server side cert and ca
-									// service.beta.openshift.io/serving-cert-secret-name: m.Name-mtls-secret
-									SecretName: SECRET_MTLS_NAME,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
+	values := struct {
+		DexImage           string
+		ServiceAccountName string
+		TlsSecretName      string
+		MtlsSecretName     string
+		DexServer          *authv1alpha1.DexServer
+	}{
+		DexImage:           dexImage,
+		ServiceAccountName: SERVICE_ACCOUNT_NAME,
+		// this secret is generated using service serving certificate via service annotation
+		// service.beta.openshift.io/serving-cert-secret-name: dexServer.Name-tls-secret
+		TlsSecretName: fmt.Sprintf(dexServer.Name + SECRET_WEB_TLS_SUFFIX),
+		// This secret is generated by this controller, here we load the server side cert and ca
+		// service.beta.openshift.io/serving-cert-secret-name: dexServer.Name-mtls-secret
+		MtlsSecretName: SECRET_MTLS_NAME,
+		DexServer:      dexServer,
 	}
 
-	// TODO: dep.Spec.Template.Spec.ServiceAccountName = m.Name
-	dep.Spec.Template.Spec.ServiceAccountName = SERVICE_ACCOUNT_NAME
+	files := []string{
+		"dex-server/deployment.yaml",
+	}
 
-	ctrl.SetControllerReference(m, dep, r.Scheme)
-	return dep, nil
+	applier, readerDeploy := r.getApplierAndReader(dexServer)
+	_, err = applier.ApplyDeployments(readerDeploy, values, false, "", files...)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (r *DexServerReconciler) defineService(m *authv1alpha1.DexServer) *corev1.Service {
-	// ls := labelsForDexConfig(m.Name)
-	labels := map[string]string{
-		"app": m.Name,
+func (r *DexServerReconciler) syncService(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
+	log := ctrllog.FromContext(ctx)
+	log.Info("syncService", "DexServer.Name", dexServer.Name, "DexServer.Namespace", dexServer.Namespace)
+
+	values := struct {
+		ServingCertSecretName string
+		DexServer             *authv1alpha1.DexServer
+	}{
+		ServingCertSecretName: fmt.Sprintf(dexServer.Name + SECRET_WEB_TLS_SUFFIX),
+		DexServer:             dexServer,
 	}
-	matchlabels := map[string]string{
-		"app": m.Name,
+
+	files := []string{
+		"dex-server/service_http.yaml",
 	}
-	resource := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Name,
-			Namespace: m.Namespace,
-			Labels:    labels,
-			Annotations: map[string]string{
-				"service.beta.openshift.io/serving-cert-secret-name": fmt.Sprintf(m.Name + SECRET_WEB_TLS_SUFFIX),
-			},
-		},
-		Spec: corev1.ServiceSpec{
-			Type: corev1.ServiceTypeClusterIP,
-			Ports: []corev1.ServicePort{
-				{
-					Port:     5556,
-					Protocol: "TCP",
-					Name:     "http",
-				},
-			},
-			Selector: matchlabels,
-		},
+
+	applier, readerDeploy := r.getApplierAndReader(dexServer)
+	_, err := applier.ApplyDirectly(readerDeploy, values, false, "", files...)
+	if err != nil {
+		return err
 	}
-	ctrl.SetControllerReference(m, resource, r.Scheme)
-	return resource
+
+	return nil
 }
 
-func (r *DexServerReconciler) defineServiceGrpc(m *authv1alpha1.DexServer) *corev1.Service {
-	labels := map[string]string{
-		"app": m.Name,
+func (r *DexServerReconciler) getApplierAndReader(dexServer *authv1alpha1.DexServer) (clusteradmapply.Applier, asset.ScenarioReader) {
+	applierBuilder := &clusteradmapply.ApplierBuilder{}
+	applier := applierBuilder.
+		WithClient(r.KubeClient, r.APIExtensionClient, r.DynamicClient).
+		WithOwner(dexServer, true, true, r.Scheme).
+		Build()
+
+	readerDeploy := deploy.GetScenarioResourcesReader()
+	return applier, readerDeploy
+}
+
+func (r *DexServerReconciler) syncServiceGrpc(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
+	log := ctrllog.FromContext(ctx)
+	log.Info("syncServiceGrpc", "DexServer.Name", dexServer.Name, "DexServer.Namespace", dexServer.Namespace)
+
+	values := struct {
+		GrpcServiceName string
+		DexServer       *authv1alpha1.DexServer
+	}{
+		GrpcServiceName: GRPC_SERVICE_NAME,
+		DexServer:       dexServer,
 	}
-	matchlabels := map[string]string{
-		"app": m.Name,
+
+	files := []string{
+		"dex-server/service_grpc.yaml",
 	}
-	resource := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      GRPC_SERVICE_NAME,
-			Namespace: m.Namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.ServiceSpec{
-			Type: corev1.ServiceTypeClusterIP,
-			Ports: []corev1.ServicePort{
-				{
-					Port:     5557,
-					Protocol: "TCP",
-					Name:     "grpc",
-				},
-			},
-			Selector: matchlabels,
-		},
+
+	applier, readerDeploy := r.getApplierAndReader(dexServer)
+	_, err := applier.ApplyDirectly(readerDeploy, values, false, "", files...)
+	if err != nil {
+		return err
 	}
-	ctrl.SetControllerReference(m, resource, r.Scheme)
-	return resource
+
+	return nil
 }
 
 // Definition of types needed to construct the config map used by the Dex application
@@ -687,16 +522,14 @@ type DexConfigYamlSpec struct {
 	EnablePasswordDB bool                   `yaml:"enablePasswordDB,omitempty"`
 }
 
-func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx context.Context) *corev1.ConfigMap {
+func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
 	log := ctrllog.FromContext(ctx)
-
-	labels := map[string]string{
-		"app": m.Name,
-	}
+	log.Info("syncConfigMap")
 
 	// Define config yaml data for Dex
+	// TODO: Support overriding all but grpc from DexServer
 	configYamlData := DexConfigYamlSpec{
-		Issuer: m.Spec.Issuer,
+		Issuer: dexServer.Spec.Issuer,
 		Storage: DexStorageSpec{
 			Type: "kubernetes",
 			Config: DexStorageConfigSpec{
@@ -722,13 +555,13 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 	}
 
 	// Iterate over connectors defined in the DexServer to create the dex configuration for connectors
-	for _, connector := range m.Spec.Connectors {
-		var newConnector DexConnectorSpec
 
+	for _, connector := range dexServer.Spec.Connectors {
+		var newConnector DexConnectorSpec
 		switch connector.Type {
 		case authv1alpha1.ConnectorTypeGitHub:
 			// Get Github ClientSecret from SecretRef
-			clientSecret, err := getConnectorSecretFromRef(connector, m, r, ctx)
+			clientSecret, err := getConnectorSecretFromRef(connector, dexServer, r, ctx)
 
 			if err != nil {
 				log.Error(err, "Error getting client secret")
@@ -749,7 +582,7 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 			}
 		case authv1alpha1.ConnectorTypeMicrosoft:
 			// Get Microsoft ClientSecret from SecretRef
-			clientSecret, err := getConnectorSecretFromRef(connector, m, r, ctx)
+			clientSecret, err := getConnectorSecretFromRef(connector, dexServer, r, ctx)
 
 			if err != nil {
 				log.Error(err, "Error getting client secret")
@@ -769,7 +602,7 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 			}
 		case authv1alpha1.ConnectorTypeLDAP:
 			// Get LDAP BindPW from SecretRef
-			bindPW, err := getConnectorSecretFromRef(connector, m, r, ctx)
+			bindPW, err := getConnectorSecretFromRef(connector, dexServer, r, ctx)
 
 			if err != nil {
 				log.Error(err, "Error getting bind pw")
@@ -844,71 +677,58 @@ func (r *DexServerReconciler) defineConfigMap(m *authv1alpha1.DexServer, ctx con
 	configYaml, err := yaml.Marshal(&configYamlData)
 
 	if err != nil {
-		log.Info("Error! failed to marshal dex config.yaml")
-		return nil
+		log.Error(err, "failed to marshal dex config.yaml")
+		return err
 	}
 
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Name,
-			Namespace: m.Namespace,
-			Labels:    labels,
-		},
-		Data: map[string]string{"config.yaml": string(configYaml)},
+	values := struct {
+		ConfigYaml string
+		DexServer  *authv1alpha1.DexServer
+	}{
+		ConfigYaml: string(configYaml),
+		DexServer:  dexServer,
 	}
-	ctrl.SetControllerReference(m, cm, r.Scheme)
-	return cm
+
+	files := []string{
+		"dex-server/config_map.yaml",
+	}
+
+	applier, readerDeploy := r.getApplierAndReader(dexServer)
+	_, err = applier.ApplyDirectly(readerDeploy, values, false, "", files...)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-// https://stackoverflow.com/questions/47104454/openshift-online-v3-adding-new-route-gives-forbidden-error
-func (r *DexServerReconciler) defineRoute(m *authv1alpha1.DexServer) *routev1.Route {
-	ls := labelsForDexServer(m.Name, m.Namespace)
-	u, _ := url.Parse(m.Spec.Issuer)
+func (r *DexServerReconciler) syncIngress(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
+	log := ctrllog.FromContext(ctx)
+	u, _ := url.Parse(dexServer.Spec.Issuer)
 	routeHost := u.Host
-
-	routeSpec := &routev1.Route{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Name,
-			Namespace: m.Namespace,
-			Labels:    ls,
-		},
-		Spec: routev1.RouteSpec{
-			Host: routeHost,
-			TLS: &routev1.TLSConfig{
-				// Termination: routev1.TLSTerminationPassthrough,
-				// Termination: routev1.TLSTerminationEdge,
-				Termination:                   routev1.TLSTerminationReencrypt,
-				InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
-			},
-			To: routev1.RouteTargetReference{
-				Kind: "Service",
-				Name: m.Name,
-			},
-			Port: &routev1.RoutePort{
-				TargetPort: intstr.IntOrString{
-					Type:   intstr.String,
-					StrVal: "http",
-				},
-			},
-			WildcardPolicy: routev1.WildcardPolicyNone,
-		},
+	log.Info("syncIngress", "Host", routeHost)
+	values := struct {
+		Host      string
+		DexServer *authv1alpha1.DexServer
+	}{
+		Host:      routeHost,
+		DexServer: dexServer,
 	}
-	ctrl.SetControllerReference(m, routeSpec, r.Scheme)
-	return routeSpec
-}
 
-// getDexResources will return the ResourceRequirements for the Dex container.
-func getDexResources(cr *authv1alpha1.DexServer) corev1.ResourceRequirements {
-	resources := corev1.ResourceRequirements{}
-	return resources
-}
-
-func labelsForDexServer(name string, namespace string) map[string]string {
-	return map[string]string{
-		"app":                 name,
-		"dexconfig_name":      name,
-		"dexconfig_namespace": namespace,
+	files := []string{
+		"dex-server/ingress.yaml",
 	}
+
+	applier, readerDeploy := r.getApplierAndReader(dexServer)
+	// TODO: ApplyCustomResources is a hack... no support currently for applying a route or ingress and this seems to work
+	_, err := applier.ApplyCustomResources(readerDeploy, values, false, "", files...)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -920,7 +740,7 @@ func (r *DexServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&corev1.Secret{}).
 		Owns(&appsv1.Deployment{}).
-		Owns(&routev1.Route{}). /* TODO(cdoan): add Ingress */
+		Owns(&networkingv1.Ingress{}).
 		Complete(r)
 }
 
