@@ -10,6 +10,12 @@ metadata:
   annotations:
     route.openshift.io/termination: "reencrypt"
 spec:
+  {{ if .IngressCertificateName}}
+  tls:
+  - hosts:
+      - "{{ .Host }}"
+    secretName: {{ .IngressCertificateName }}
+  {{ end }}
   rules:
   - host: "{{ .Host }}"
     http:

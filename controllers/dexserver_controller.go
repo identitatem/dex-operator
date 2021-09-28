@@ -329,7 +329,7 @@ func (r *DexServerReconciler) syncClusterRoleBinding(dexServer *authv1alpha1.Dex
 func getDexImagePullSpec() (string, error) {
 	imageName := os.Getenv(DEX_IMAGE_ENV_NAME)
 	if len(imageName) == 0 {
-		return "", fmt.Errorf("Required environment variable %v is empty or not set", DEX_IMAGE_ENV_NAME)
+		return "", fmt.Errorf("required environment variable %v is empty or not set", DEX_IMAGE_ENV_NAME)
 	}
 	return imageName, nil
 }
@@ -435,31 +435,6 @@ func (r *DexServerReconciler) syncServiceGrpc(dexServer *authv1alpha1.DexServer,
 	return nil
 }
 
-// Definition of types needed to construct the config map used by the Dex application
-type DexStorageConfigSpec struct {
-	InCluster bool `yaml:"inCluster,omitempty"`
-}
-
-type DexStorageSpec struct {
-	Type   string               `yaml:"type,omitempty"`
-	Config DexStorageConfigSpec `yaml:"config,omitempty"`
-}
-
-type DexWebSpec struct {
-	Http    string `yaml:"http,omitempty"`
-	Https   string `yaml:"https,omitempty"`
-	TlsCert string `yaml:"tlsCert,omitempty"`
-	TlsKey  string `yaml:"tlsKey,omitempty"`
-}
-
-type DexGrpcSpec struct {
-	Addr        string `yaml:"addr,omitempty"`
-	TlsCert     string `yaml:"tlsCert,omitempty"`
-	TlsKey      string `yaml:"tlsKey,omitempty"`
-	TlsClientCA string `yaml:"tlsClientCA,omitempty"`
-	Reflection  bool   `yaml:"reflection,omitempty"`
-}
-
 type DexConnectorConfigSpec struct {
 	// Common fields between GitHub and Microsoft OAuth2 configuration
 	ClientID     string `yaml:"clientID,omitempty"`
@@ -502,59 +477,12 @@ type DexConnectorSpec struct {
 	Name   string                 `yaml:"name,omitempty"`
 	Config DexConnectorConfigSpec `yaml:"config,omitempty"`
 }
-type DexOauth2Spec struct {
-	SkipApprovalScreen bool `yaml:"skipApprovalScreen,omitempty"`
-}
-
-type DexStaticClientsSpec struct {
-	Id           string   `yaml:"id,omitempty"`
-	RedirectURIs []string `yaml:"redirectURIs,omitempty"`
-	Name         string   `yaml:"name,omitempty"`
-	Secret       string   `yaml:"secret,omitempty"`
-}
-
-type DexConfigYamlSpec struct {
-	Issuer           string                 `yaml:"issuer,omitempty"`
-	Storage          DexStorageSpec         `yaml:"storage,omitempty"`
-	Web              DexWebSpec             `yaml:"web,omitempty"`
-	Grpc             DexGrpcSpec            `yaml:"grpc,omitempty"`
-	Connectors       []DexConnectorSpec     `yaml:"connectors,omitempty"`
-	Oauth2           DexOauth2Spec          `yaml:"oauth2,omitempty"`
-	StaticClents     []DexStaticClientsSpec `yaml:"staticClients,omitempty"`
-	EnablePasswordDB bool                   `yaml:"enablePasswordDB,omitempty"`
-}
 
 func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
 	log := ctrllog.FromContext(ctx)
 	log.Info("syncConfigMap")
 
-	// Define config yaml data for Dex
-	// TODO: Support overriding all but grpc from DexServer
-	configYamlData := DexConfigYamlSpec{
-		Issuer: dexServer.Spec.Issuer,
-		Storage: DexStorageSpec{
-			Type: "kubernetes",
-			Config: DexStorageConfigSpec{
-				InCluster: true,
-			},
-		},
-		Web: DexWebSpec{
-			Https:   "0.0.0.0:5556",
-			TlsCert: "/etc/dex/tls/tls.crt",
-			TlsKey:  "/etc/dex/tls/tls.key",
-		},
-		Grpc: DexGrpcSpec{
-			Addr:        "0.0.0.0:5557",
-			TlsCert:     "/etc/dex/mtls/tls.crt",
-			TlsKey:      "/etc/dex/mtls/tls.key",
-			TlsClientCA: "/etc/dex/mtls/ca.crt",
-			Reflection:  true,
-		},
-		Oauth2: DexOauth2Spec{
-			SkipApprovalScreen: true,
-		},
-		EnablePasswordDB: true,
-	}
+	connectors := []DexConnectorSpec{}
 
 	// Iterate over connectors defined in the DexServer to create the dex configuration for connectors
 
@@ -662,21 +590,17 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 		}
 
 		// Add connector to list
-		configYamlData.Connectors = append(configYamlData.Connectors, newConnector)
+		connectors = append(connectors, newConnector)
 	}
 
-	// The following code can be uncommented if we need to use StaticClients
-	// Define StaticClients
-	// newStaticClient := DexStaticClientsSpec{
-	// 	Id:           "example-app",
-	// 	RedirectURIs: []string{"http://127.0.0.1:5555/callback"},
-	// 	Name:         "Example App",
-	// 	Secret:       "another-client-secret",
-	// }
-	// configYamlData.StaticClents = append(configYamlData.StaticClents, newStaticClient)
+	connectorYamlSpec := struct {
+		Connectors []DexConnectorSpec `json:"connectors,omitempty"`
+	}{
+		Connectors: connectors,
+	}
 
 	// Get yaml representation of configYamlData
-	configYaml, err := yaml.Marshal(&configYamlData)
+	connectorYaml, err := yaml.Marshal(&connectorYamlSpec)
 
 	if err != nil {
 		log.Error(err, "failed to marshal dex config.yaml")
@@ -684,11 +608,13 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 	}
 
 	values := struct {
-		ConfigYaml string
-		DexServer  *authv1alpha1.DexServer
+		Issuer         string
+		ConnectorsYaml string
+		DexServer      *authv1alpha1.DexServer
 	}{
-		ConfigYaml: string(configYaml),
-		DexServer:  dexServer,
+		Issuer:         dexServer.Spec.Issuer,
+		ConnectorsYaml: string(connectorYaml),
+		DexServer:      dexServer,
 	}
 
 	files := []string{
@@ -709,12 +635,17 @@ func (r *DexServerReconciler) syncIngress(dexServer *authv1alpha1.DexServer, ctx
 	u, _ := url.Parse(dexServer.Spec.Issuer)
 	routeHost := u.Host
 	log.Info("syncIngress", "Host", routeHost)
+
+	ingressCertificateRefName := dexServer.Spec.IngressCertificateRef.Name
+
 	values := struct {
-		Host      string
-		DexServer *authv1alpha1.DexServer
+		Host                   string
+		DexServer              *authv1alpha1.DexServer
+		IngressCertificateName string
 	}{
-		Host:      routeHost,
-		DexServer: dexServer,
+		Host:                   routeHost,
+		DexServer:              dexServer,
+		IngressCertificateName: ingressCertificateRefName,
 	}
 
 	files := []string{

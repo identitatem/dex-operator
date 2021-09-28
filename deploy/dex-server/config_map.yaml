@@ -7,5 +7,21 @@ metadata:
   namespace: "{{ .DexServer.Namespace }}"
 data:
   config.yaml: |
-{{ .ConfigYaml | indent 4 }}
-
+    issuer: "{{ .Issuer }}"
+    storage:
+      type: kubernetes
+      config:
+        inCluster: true
+    web:
+      https: 0.0.0.0:5556
+      tlsCert: /etc/dex/tls/tls.crt
+      tlsKey: /etc/dex/tls/tls.key
+    grpc:
+      addr: 0.0.0.0:5557
+      tlsCert: /etc/dex/mtls/tls.crt
+      tlsKey: /etc/dex/mtls/tls.key
+      tlsClientCA: /etc/dex/mtls/ca.crt
+      reflection: true
+    oauth2:
+      skipApprovalScreen: true
+{{ .ConnectorsYaml | indent 4 }}
