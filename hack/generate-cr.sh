@@ -28,7 +28,21 @@ export DEXSERVER_LDAP_SECRET=${DEXSERVER_LDAP_SECRET:-"admin"}
 export DEXSERVER_LDAP_BIND_DN=${DEXSERVER_LDAP_BIND_DN:-"cn=Manager,dc=example,dc=com"}
 export DEXSERVER_LDAP_USERSEARCH_BASEDN=${DEXSERVER_LDAP_USERSEARCH_BASEDN:-"dc=example,dc=com"}
 
-cat > demo-dexserver-${NAME}-${NS}.yaml <<EOF
+export DEXSERVER_LDAP_AD_HOST=${DEXSERVER_LDAP_AD_HOST:-"ldaps.vntestldap.com:636"}
+export DEXSERVER_LDAP_AD_BP_SECRET_NAME=${DEXSERVER_LDAP_AD_BP_SECRET_NAME:-"ldap-ad-bind-pw"}
+export DEXSERVER_LDAP_AD_BP_SECRET=${DEXSERVER_LDAP_AD_BP_SECRET:-"bind-pw-ad"}
+export DEXSERVER_LDAP_AD_ROOTCA_SECRET_NAME=${DEXSERVER_LDAP_AD_ROOTCA_SECRET_NAME:-"ldap-ad-rootca"}
+export DEXSERVER_LDAP_AD_BIND_DN=${DEXSERVER_LDAP_AD_BIND_DN:-"cn=Admin,ou=AADDC Users,dc=vntestldap,dc=com"}
+export DEXSERVER_LDAP_AD_USERSEARCH_BASEDN=${DEXSERVER_LDAP_AD_USERSEARCH_BASEDN:-"ou=AADDC Users,dc=vntestldap,dc=com"}
+
+# Secret containing root ca (ca.crt), and client cert and key (tls.crt, tls.key) to test LDAP on Azure AD with self-signed certificates
+oc create secret generic ${DEXSERVER_LDAP_AD_ROOTCA_SECRET_NAME} \
+--from-file=ca.crt=ldap-certs/ca.crt \
+--from-file=tls.crt=ldap-certs/tls.crt \
+--from-file=tls.key=ldap-certs/tls.key \
+-n ${SECRET_NS} --dry-run -o yaml > demo-dexserver-${NAME}-${NS}.yaml
+
+cat >> demo-dexserver-${NAME}-${NS}.yaml <<EOF
 ---
 apiVersion: v1
 kind: Secret
@@ -56,6 +70,15 @@ metadata:
 type: Opaque
 stringData:
   bindPW: ${DEXSERVER_LDAP_SECRET}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${DEXSERVER_LDAP_AD_BP_SECRET_NAME}
+  namespace: ${SECRET_NS}
+type: Opaque
+stringData:
+  bindPW: ${DEXSERVER_LDAP_AD_BP_SECRET}
 ---
 apiVersion: auth.identitatem.io/v1alpha1
 kind: DexServer
@@ -85,7 +108,7 @@ spec:
       tenant: ${DEXSERVER_MS_TENANT}     
   - type: ldap
     id: ldap
-    name: OpenLDAP
+    name: openldap
     ldap:
       host: ${DEXSERVER_LDAP_HOST}
       insecureNoSSL: false
@@ -101,7 +124,28 @@ spec:
         username: mail
         idAttr: DN
         emailAttr: mail
-        nameAttr: cn      
+        nameAttr: cn
+  - type: ldap
+    id: ldap2
+    name: activedirectory
+    ldap:
+      host: ${DEXSERVER_LDAP_AD_HOST}
+      insecureNoSSL: false
+      bindDN: ${DEXSERVER_LDAP_AD_BIND_DN}
+      bindPWRef:
+        name: ${DEXSERVER_LDAP_AD_BP_SECRET_NAME}
+        namespace: ${NS}
+      rootCARef:
+        name: ${DEXSERVER_LDAP_AD_ROOTCA_SECRET_NAME}
+        namespace: ${NS}                    
+      usernamePrompt: Email Address
+      userSearch:
+        baseDN: ${DEXSERVER_LDAP_AD_USERSEARCH_BASEDN}
+        filter: "(objectClass=person)"
+        username: userPrincipalName
+        idAttr: DN
+        emailAttr: userPrincipalName
+        nameAttr: cn          
 EOF
 
 # DEX CLIENT

@@ -130,8 +130,9 @@ type LDAPConfigSpec struct {
 	// Connect to the insecure port and then issue a StartTLS command to negotiate a secure connection.
 	// If unspecified, connections will use the ldaps:// protocol
 	StartTLS bool `json:"startTLS,omitempty"`
-	// Path to a trusted root certificate file. Default: use the host's root CA
-	RootCA string `json:"rootCA,omitempty"`
+	// Reference to the secret containing a trusted Root CA file - file name and format: "ca.crt"
+	// Note: If the server uses self-signed certificates, include files with names "tls.crt" and "tls.key" (representing client certificate and key) in the same secret
+	RootCARef corev1.SecretReference `json:"rootCARef,omitempty"`
 	// A raw certificate file can also be provided inline as a base64 encoded PEM file.
 	RootCAData []byte `json:"rootCAData,omitempty"`
 	// The DN for an application service account. The connector uses the bindDN and bindPW as credentials to
@@ -153,7 +154,8 @@ type LDAPConfigSpec struct {
 type ConnectorSpec struct {
 	Name string `json:"name,omitempty"`
 	// +kubebuilder:validation:Enum=github;ldap;microsoft
-	Type      ConnectorType       `json:"type,omitempty"`
+	Type ConnectorType `json:"type,omitempty"`
+	// Unique Id for the connector
 	Id        string              `json:"id,omitempty"`
 	GitHub    GitHubConfigSpec    `json:"github,omitempty"`
 	LDAP      LDAPConfigSpec      `json:"ldap,omitempty"`
