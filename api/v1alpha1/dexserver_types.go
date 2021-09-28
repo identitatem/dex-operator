@@ -93,6 +93,21 @@ type GitHubConfigSpec struct {
 	UseLoginAsID    bool                   `json:"useLoginAsID,omitempty"`
 }
 
+// MicrosoftConfigSpec describes the configuration specific to the Microsoft connector
+type MicrosoftConfigSpec struct {
+	ClientID        string                 `json:"clientID,omitempty"`
+	ClientSecretRef corev1.SecretReference `json:"clientSecretRef,omitempty"`
+	RedirectURI     string                 `json:"redirectURI,omitempty"`
+	// groups claim in dex is only supported when tenant is specified in Microsoft connector config.
+	Tenant 			string 					`json:"tenant,omitempty"`
+	// When the groups claim is present in a request to dex and tenant is configured,
+	// dex will query Microsoft API to obtain a list of groups the user is a member of.
+	// onlySecurityGroups configuration option restricts the list to include only security groups.
+	// By default all groups (security, Office 365, mailing lists) are included.
+	OnlySecurityGroups bool     `json:"onlySecurityGroups,omitempty"`
+	Groups             []string `json:"groups,omitempty"`
+}
+
 // LDAP UserMatcher holds information about user and group matching
 type UserMatcher struct {
 	UserAttr  string `json:"userAttr"`
@@ -182,11 +197,12 @@ type LDAPConfigSpec struct {
 // ConnectorSpec defines the OIDC connector config details
 type ConnectorSpec struct {
 	Name string `json:"name,omitempty"`
-	// +kubebuilder:validation:Enum=github;ldap
-	Type   ConnectorType    `json:"type,omitempty"`
-	Id     string           `json:"id,omitempty"`
-	GitHub GitHubConfigSpec `json:"github,omitempty"`
-	LDAP   LDAPConfigSpec   `json:"ldap,omitempty"`
+	// +kubebuilder:validation:Enum=github;ldap;microsoft
+	Type      ConnectorType       `json:"type,omitempty"`
+	Id        string              `json:"id,omitempty"`
+	GitHub    GitHubConfigSpec    `json:"github,omitempty"`
+	LDAP      LDAPConfigSpec      `json:"ldap,omitempty"`
+	Microsoft MicrosoftConfigSpec `json:"microsoft,omitempty"`
 }
 
 type ConnectorType string
@@ -197,6 +213,9 @@ const (
 
 	// ConnectorTypeLDAP enables Dex to allow email/password based authentication, backed by an LDAP directory
 	ConnectorTypeLDAP ConnectorType = "ldap"
+
+	// ConnectorTypeMicrosoft enables Dex to use the Microsoft OAuth2 flow to identify the end user through their Microsoft account
+	ConnectorTypeMicrosoft ConnectorType = "microsoft"
 )
 
 // DexServerSpec defines the desired state of DexServer

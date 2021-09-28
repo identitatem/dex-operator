@@ -327,7 +327,7 @@ spec:
                 env:
                 - name: RELATED_IMAGE_DEX
                   value: quay.io/dexidp/dex:v2.28.1
-                image: quay.io/vnambiar/dex-operator:0.0.2
+                image: quay.io/vnambiar/dex-operator:add-ms
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:

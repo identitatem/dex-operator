@@ -96,6 +96,22 @@ This is a operator-sdk based operator to deploy and manage a Dex server instance
         adding new entry "cn=jane,dc=example,dc=com"
         ```
         You can make additional modifications as needed to the LDAP connector configuration in the DexServer manifest definition in `hack/generate_cr.sh`
+    </br>
+    - **Microsoft OAuth2**
+        Follow the steps [here](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app) to register an application with the Microsoft Identity platform.
+        Set the **Redirect URI** to the callback URL for the dex service. `https://<location of dex service>/callback`
+        Note the Client ID and Client Secret for the registered application.
+        Set the following evironment variables:
+        ```bash
+        # your microsoft application client id
+        export DEXSERVER_MS_CLIENT_ID=...
+        # your microsoft application client secret
+        export DEXSERVER_MS_CLIENT_SECRET=...
+        # your Azure AD tenant ID (the tenant in which this application was registered)
+        export DEXSERVER_MS_TENANT=...        
+        ```        
+
+
 
 4. generate the minimal set of manifests for github OAUTH application and LDAP authentication
 
