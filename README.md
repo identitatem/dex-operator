@@ -113,6 +113,22 @@ This is a operator-sdk based operator to deploy and manage a Dex server instance
 
 
 
+    - **LDAP using Azure Active Directory:**
+        - Follow the steps [here](https://docs.google.com/document/d/1TC23Ok-CaXFm7AI0JatjEZbYUiycV_PeyHk9GRTylzA/edit?usp=sharing) to setup secure LDAP with Azure Active Directory.
+        - Place the Root CA, Client Cert and Client key (ca.crt, tls.crt, tls.key) files in the hack/ldap-certs directory
+        - Override the following environment variables:
+        ```bash
+        # AD DS Secure LDAP Host
+        export DEXSERVER_LDAP_AD_HOST=...
+        # LDAP Bind DN 
+        export DEXSERVER_LDAP_AD_BIND_DN=...
+        # LDAP Bind PW (The bindDN and bindPW are used as credentials to search for users and passwords)
+        export DEXSERVER_LDAP_AD_BP_SECRET=...
+        # Base DN to start the search from
+        export DEXSERVER_LDAP_AD_USERSEARCH_BASEDN=...
+        ```
+        You can make additional modifications as needed to the LDAP connector configuration in the DexServer manifest definition in `hack/generate_cr.sh`
+
 4. generate the minimal set of manifests for github OAUTH application and LDAP authentication
 
     ```bash
