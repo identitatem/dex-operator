@@ -274,87 +274,21 @@ spec:
                       type: string
                   type: object
                 type: array
-              enablepassworddb:
-                type: boolean
-              expiry:
-                description: ExpirySpec defines how we expire
+              ingressCertificateRef:
+                description: Optional bring-your-own-certificate. Otherwise, the default
+                  certificate is used for dex server Ingress.
                 properties:
-                  deviceRequests:
-                    type: string
-                type: object
-              foo:
-                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "make" to regenerate code after modifying this file
-                  Foo is an example field of DexServer. Edit dexserver_types.go to
-                  remove/update'
-                type: string
-              grpc:
-                description: GrpcSpec defines override options on how we run grpc
-                  server. Addr should not need to change. The certs are required.
-                properties:
-                  addr:
-                    type: string
-                  tlsCert:
-                    type: string
-                  tlsClientCA:
-                    type: string
-                  tlsKey:
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?'
                     type: string
                 type: object
               issuer:
-                description: 'TODO: Issuer references the dex instance web URI. Should
-                  this be returned as status?'
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file
+                  TODO: Issuer references the dex instance web URI. Should this be
+                  returned as status?'
                 type: string
-              logger:
-                description: LoggerSpec defines loggingoptions. Optional
-                properties:
-                  format:
-                    type: string
-                  level:
-                    type: string
-                type: object
-              oauth2:
-                description: Oauth2Spec defines dex behavior flags
-                properties:
-                  alwaysShowLoginScreen:
-                    type: boolean
-                  passwordConnector:
-                    type: string
-                  responseTypes:
-                    items:
-                      type: string
-                    type: array
-                  skipApprovalScreen:
-                    type: boolean
-                type: object
-              staticpasswords:
-                items:
-                  description: StaticPasswordSpec allows us to define login credentials.
-                    Do not expect us to use this.
-                  properties:
-                    email:
-                      type: string
-                  type: object
-                type: array
-              storage:
-                description: StorageSpec defines how/if we persist the configuration
-                  to a database on store in K8s.
-                properties:
-                  type:
-                    type: string
-                type: object
-              web:
-                description: WebSpec defines override for cert to dex server.
-                properties:
-                  http:
-                    type: string
-                  https:
-                    type: string
-                  tlsCert:
-                    type: string
-                  tlsKey:
-                    type: string
-                type: object
             type: object
           status:
             description: DexServerStatus defines the observed state of DexServer
