@@ -63,38 +63,6 @@ metadata:
   name: ${NAME}
 spec:
   issuer: https://${NAME}-${NS}.${APPS}
-  enablePasswordDB: false
-  storage:
-    type: kubernetes
-    config:
-      inCluster: true
-  web:
-    http: 0.0.0.0:5556
-    tlsCert: secretRef
-    tlsKey: secretRef
-  grpc:
-    addr: 0.0.0.0:5557
-    tlsCert: secretRef
-    tlsKey: secretRef
-    tlsClientCA: secretRef
-  expiry:
-    deviceRequests: "5m"
-    signingKeys: "6h"
-    idTokens: "24h"
-    refreshTokens:
-      reuseInterval: "3s"
-      validIfNotUsedFor: "2160h"
-      absoluteLifetime: "3960h"
-  logger:
-    level: "1"
-    format: "json"
-  oauth2:
-    responseTypes:
-    - "code"
-    - "token"
-    skipApprovalScreen: false
-    alwasyShowLoginScreen: false
-    passwordConnector: "local"
   connectors:
   - type: github
     id: github
