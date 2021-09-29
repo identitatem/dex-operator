@@ -263,8 +263,11 @@ spec:
           - clusterrolebindings
           verbs:
           - create
+          - delete
           - get
           - list
+          - patch
+          - update
           - watch
         - apiGroups:
           - rbac.authorization.k8s.io
@@ -347,7 +350,7 @@ spec:
                 env:
                 - name: RELATED_IMAGE_DEX
                   value: quay.io/dexidp/dex:v2.28.1
-                image: quay.io/vnambiar/dex-operator:add-ms
+                image: quay.io/vnambiar/dex-operator:main
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
