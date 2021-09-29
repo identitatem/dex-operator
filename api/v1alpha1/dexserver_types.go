@@ -99,7 +99,7 @@ type MicrosoftConfigSpec struct {
 	ClientSecretRef corev1.SecretReference `json:"clientSecretRef,omitempty"`
 	RedirectURI     string                 `json:"redirectURI,omitempty"`
 	// groups claim in dex is only supported when tenant is specified in Microsoft connector config.
-	Tenant 			string 					`json:"tenant,omitempty"`
+	Tenant string `json:"tenant,omitempty"`
 	// When the groups claim is present in a request to dex and tenant is configured,
 	// dex will query Microsoft API to obtain a list of groups the user is a member of.
 	// onlySecurityGroups configuration option restricts the list to include only security groups.
