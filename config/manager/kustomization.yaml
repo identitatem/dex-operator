@@ -13,4 +13,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: quay.io/vnambiar/dex-operator
-  newTag: main
+  newTag: role-update
