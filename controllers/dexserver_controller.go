@@ -37,8 +37,11 @@ import (
 	clusteradmapply "open-cluster-management.io/clusteradm/pkg/helpers/apply"
 	"open-cluster-management.io/clusteradm/pkg/helpers/asset"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/identitatem/dex-operator/api/v1alpha1"
 	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
@@ -734,15 +737,65 @@ func (r *DexServerReconciler) syncIngress(dexServer *authv1alpha1.DexServer, ctx
 
 }
 
+// Rolling restarts are accomplished with an annotation on the pod template. Ignore this and resulting updates
+// to allow rolling restarts to complete successfully.
+func ignoreDeploymentRestartPredicate() predicate.Predicate {
+	// hold the generation of any deployment restarts in progress, by namespace and name
+	restartsInProgress := map[string]int64{}
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			if len(e.ObjectOld.GetOwnerReferences()) == 0 {
+				return false
+			} else if e.ObjectOld.GetOwnerReferences()[0].Kind != "DexServer" {
+				return false
+			}
+			namespacedName := fmt.Sprintf("%s:%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName())
+			log := ctrl.Log.WithName("controllers").WithName("dexserver").WithName("ignoreDeploymentRestartPredicate").WithValues("namespace", e.ObjectNew.GetNamespace(), "name", e.ObjectNew.GetName())
+			if restartInProgressGeneration, found := restartsInProgress[namespacedName]; found {
+				log.V(1).Info("restart in progress for deployment", "generation", restartInProgressGeneration)
+				if restartInProgressGeneration == e.ObjectNew.GetGeneration() {
+					log.V(1).Info("updates are due to restart in progress... ignore")
+					return false
+				} else {
+					log.V(1).Info("new generation detected", "generation", e.ObjectNew.GetGeneration())
+					delete(restartsInProgress, namespacedName)
+				}
+			}
+			log.V(1).Info("deployment updated", "generation", e.ObjectNew.GetGeneration())
+			oldDeployment := e.ObjectOld.(*appsv1.Deployment)
+			newDeployment := e.ObjectNew.(*appsv1.Deployment)
+
+			newPodSpecAnnotations := newDeployment.Spec.Template.ObjectMeta.Annotations
+			if newDeploymentRestartedAt, found := newPodSpecAnnotations["kubectl.kubernetes.io/restartedAt"]; found {
+				oldPodSpecAnnotations := oldDeployment.Spec.Template.ObjectMeta.Annotations
+				if len(oldPodSpecAnnotations) == 0 ||
+					(newDeploymentRestartedAt != oldPodSpecAnnotations["kubectl.kubernetes.io/restartedAt"]) {
+					// this is a new restart. don't process it. hold on to it so we can ignore future updates to the deployment from this same restart
+					restartsInProgress[namespacedName] = e.ObjectNew.GetGeneration()
+					log.V(1).Info("new restart detected", "generation", e.ObjectNew.GetGeneration())
+					return false
+				}
+			}
+			log.V(1).Info("deployment update not filtered out")
+			return true
+		},
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *DexServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+
+	deploymentOwnsOpts := []builder.OwnsOption{
+		builder.WithPredicates(ignoreDeploymentRestartPredicate()), // ignore deployment rolling restarts
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&authv1alpha1.DexServer{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&corev1.Secret{}).
-		Owns(&appsv1.Deployment{}).
+		Owns(&appsv1.Deployment{}, deploymentOwnsOpts...).
 		Owns(&networkingv1.Ingress{}).
 		Complete(r)
 }
