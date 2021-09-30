@@ -24,4 +24,5 @@ data:
       reflection: true
     oauth2:
       skipApprovalScreen: true
+      alwaysShowLoginScreen: false
 {{ .ConnectorsYaml | indent 4 }}
