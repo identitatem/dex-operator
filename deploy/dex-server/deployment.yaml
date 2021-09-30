@@ -43,6 +43,7 @@ spec:
           name: tls
         - mountPath: /etc/dex/mtls
           name: mtls
+{{ .AdditionalVolumeMounts | indent 8 }}          
       serviceAccountName: "{{ .ServiceAccountName }}"
       volumes:
       - configMap:
@@ -57,3 +58,4 @@ spec:
       - name: mtls
         secret:
           secretName: "{{ .MtlsSecretName }}"
+{{ .AdditionalVolumes | indent 6 }}          

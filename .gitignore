@@ -27,5 +27,6 @@ hack/ldap-certs/*
 *.swp
 *.swo
 *~
+.vscode
 
 dex-operator
