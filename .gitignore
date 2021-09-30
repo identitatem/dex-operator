@@ -10,6 +10,7 @@ testbin/*
 .history/*
 ***/.history
 hack/demo*.yaml
+hack/ldap-certs/*
 
 # Test binary, build with `go test -c`
 *.test
@@ -26,5 +27,6 @@ hack/demo*.yaml
 *.swp
 *.swo
 *~
+.vscode
 
 dex-operator

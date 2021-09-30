@@ -98,6 +98,7 @@ spec:
                           type: boolean
                       type: object
                     id:
+                      description: Unique Id for the connector
                       type: string
                     ldap:
                       description: LDAPConfigSpec describes the configuration specific
@@ -178,15 +179,27 @@ spec:
                             command to negotiate a secure connection. If unsupplied
                             secure connections will use the LDAPS protocol.
                           type: boolean
-                        rootCA:
-                          description: 'Path to a trusted root certificate file. Default:
-                            use the host''s root CA'
-                          type: string
                         rootCAData:
                           description: A raw certificate file can also be provided
                             inline as a base64 encoded PEM file.
                           format: byte
                           type: string
+                        rootCARef:
+                          description: 'Reference to the secret containing a trusted
+                            Root CA file - file name and format: "ca.crt" Note: If
+                            the server uses self-signed certificates, include files
+                            with names "tls.crt" and "tls.key" (representing client
+                            certificate and key) in the same secret'
+                          properties:
+                            name:
+                              description: Name is unique within a namespace to reference
+                                a secret resource.
+                              type: string
+                            namespace:
+                              description: Namespace defines the space within which
+                                the secret name must be unique.
+                              type: string
+                          type: object
                         startTLS:
                           description: Connect to the insecure port and then issue
                             a StartTLS command to negotiate a secure connection. If
