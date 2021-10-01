@@ -12,6 +12,10 @@ spec:
       dexconfig_namespace: "{{ .DexServer.Namespace }}"
   template:
     metadata:
+      {{ if .DexConfigMapHash}}
+      annotations:
+        auth.identitatem.io/configHash: "{{ .DexConfigMapHash }}"
+      {{ end }}  
       labels:
         app: "{{ .DexServer.Name }}"
         dexconfig_name: "{{ .DexServer.Name }}"

@@ -19,6 +19,8 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -383,8 +385,30 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 		}
 	}
 
+	// Add the dex ConfigMap sha256 checksum to the Deployment to trigger rolling restarts when the ConfigMap changes
+	dexConfigMap := &corev1.ConfigMap{}
+	var dexConfigMapHash string
+	if err := r.Get(ctx, types.NamespacedName{Name: dexServer.Name, Namespace: dexServer.Namespace}, dexConfigMap); err != nil {
+		// If ConfigMap is not yet found, the annotation will be omitted, and will be added once the ConfigMap is created
+		if !errors.IsNotFound(err) {
+			log.Error(err, "error getting dex server configmap")
+			return err
+		}
+	} else {
+		jsonData, err := json.Marshal(dexConfigMap)
+		if err != nil {
+			log.Error(err, "failed to marshal configmap JSON")
+			return err
+		}
+		h := sha256.New()
+		h.Write([]byte(jsonData))
+		dexConfigMapHash = fmt.Sprintf("%x", h.Sum(nil))
+		// log.Info("computed hash", "dexConfigMapHash", dexConfigMapHash)
+	}
+
 	values := struct {
 		DexImage               string
+		DexConfigMapHash       string
 		ServiceAccountName     string
 		TlsSecretName          string
 		MtlsSecretName         string
@@ -393,6 +417,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 		AdditionalVolumes      string
 	}{
 		DexImage:           dexImage,
+		DexConfigMapHash:   dexConfigMapHash,
 		ServiceAccountName: SERVICE_ACCOUNT_NAME,
 		// this secret is generated using service serving certificate via service annotation
 		// service.beta.openshift.io/serving-cert-secret-name: dexServer.Name-tls-secret
