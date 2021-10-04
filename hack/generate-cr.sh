@@ -22,18 +22,18 @@ export DEXCLIENT_SECRET_NAME=dexclient-client-secret
 export DEXCLIENT_ID=dexclientcluster2clientid
 export DEXCLIENT_SECRET=dexclientsecret123456
 
-export DEXSERVER_LDAP_HOST=${DEXSERVER_LDAP_HOST:-"adf558f301d884463a9d44329fbafc4c-145647244.us-east-1.elb.amazonaws.com:636"}
+export DEXSERVER_LDAP_HOST=${DEXSERVER_LDAP_HOST:-"ldaphost:636"}
 export DEXSERVER_LDAP_SECRET_NAME=${DEXSERVER_LDAP_SECRET_NAME:-"ldap-bindpw"}
-export DEXSERVER_LDAP_SECRET=${DEXSERVER_LDAP_SECRET:-"admin"}
-export DEXSERVER_LDAP_BIND_DN=${DEXSERVER_LDAP_BIND_DN:-"cn=Manager,dc=example,dc=com"}
-export DEXSERVER_LDAP_USERSEARCH_BASEDN=${DEXSERVER_LDAP_USERSEARCH_BASEDN:-"dc=example,dc=com"}
+export DEXSERVER_LDAP_SECRET=${DEXSERVER_LDAP_SECRET:-"foo"}
+export DEXSERVER_LDAP_BIND_DN=${DEXSERVER_LDAP_BIND_DN:-"cn=fake,dc=sample,dc=com"}
+export DEXSERVER_LDAP_USERSEARCH_BASEDN=${DEXSERVER_LDAP_USERSEARCH_BASEDN:-"dc=sample,dc=com"}
 
-export DEXSERVER_LDAP_AD_HOST=${DEXSERVER_LDAP_AD_HOST:-"ldaps.vntestldap.com:636"}
+export DEXSERVER_LDAP_AD_HOST=${DEXSERVER_LDAP_AD_HOST:-"adhost:636"}
 export DEXSERVER_LDAP_AD_BP_SECRET_NAME=${DEXSERVER_LDAP_AD_BP_SECRET_NAME:-"ldap-ad-bind-pw"}
 export DEXSERVER_LDAP_AD_BP_SECRET=${DEXSERVER_LDAP_AD_BP_SECRET:-"bind-pw-ad"}
 export DEXSERVER_LDAP_AD_ROOTCA_SECRET_NAME=${DEXSERVER_LDAP_AD_ROOTCA_SECRET_NAME:-"ldap-ad-rootca"}
-export DEXSERVER_LDAP_AD_BIND_DN=${DEXSERVER_LDAP_AD_BIND_DN:-"cn=Admin,ou=AADDC Users,dc=vntestldap,dc=com"}
-export DEXSERVER_LDAP_AD_USERSEARCH_BASEDN=${DEXSERVER_LDAP_AD_USERSEARCH_BASEDN:-"ou=AADDC Users,dc=vntestldap,dc=com"}
+export DEXSERVER_LDAP_AD_BIND_DN=${DEXSERVER_LDAP_AD_BIND_DN:-"cn=fakecn,dc=fakedomain,dc=com"}
+export DEXSERVER_LDAP_AD_USERSEARCH_BASEDN=${DEXSERVER_LDAP_AD_USERSEARCH_BASEDN:-"ou=fakeou,dc=fakedomain,dc=com"}
 
 # Secret containing root ca (ca.crt), and client cert and key (tls.crt, tls.key) to test LDAP on Azure AD with self-signed certificates
 oc create secret generic ${DEXSERVER_LDAP_AD_ROOTCA_SECRET_NAME} \
