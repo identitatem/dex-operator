@@ -96,7 +96,7 @@ This is a operator-sdk based operator to deploy and manage a Dex server instance
         adding new entry "cn=jane,dc=example,dc=com"
         ```
         You can make additional modifications as needed to the LDAP connector configuration in the DexServer manifest definition in `hack/generate_cr.sh`
-    </br>
+    
     - **Microsoft OAuth2**
         Follow the steps [here](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app) to register an application with the Microsoft Identity platform.
         Set the **Redirect URI** to the callback URL for the dex service. `https://<location of dex service>/callback`
