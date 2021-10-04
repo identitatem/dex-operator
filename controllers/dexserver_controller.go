@@ -19,6 +19,8 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -37,8 +39,11 @@ import (
 	clusteradmapply "open-cluster-management.io/clusteradm/pkg/helpers/apply"
 	"open-cluster-management.io/clusteradm/pkg/helpers/asset"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/identitatem/dex-operator/api/v1alpha1"
 	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
@@ -380,8 +385,30 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 		}
 	}
 
+	// Add the dex ConfigMap sha256 checksum to the Deployment to trigger rolling restarts when the ConfigMap changes
+	dexConfigMap := &corev1.ConfigMap{}
+	var dexConfigMapHash string
+	if err := r.Get(ctx, types.NamespacedName{Name: dexServer.Name, Namespace: dexServer.Namespace}, dexConfigMap); err != nil {
+		// If ConfigMap is not yet found, the annotation will be omitted, and will be added once the ConfigMap is created
+		if !errors.IsNotFound(err) {
+			log.Error(err, "error getting dex server configmap")
+			return err
+		}
+	} else {
+		jsonData, err := json.Marshal(dexConfigMap)
+		if err != nil {
+			log.Error(err, "failed to marshal configmap JSON")
+			return err
+		}
+		h := sha256.New()
+		h.Write([]byte(jsonData))
+		dexConfigMapHash = fmt.Sprintf("%x", h.Sum(nil))
+		// log.Info("computed hash", "dexConfigMapHash", dexConfigMapHash)
+	}
+
 	values := struct {
 		DexImage               string
+		DexConfigMapHash       string
 		ServiceAccountName     string
 		TlsSecretName          string
 		MtlsSecretName         string
@@ -390,6 +417,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 		AdditionalVolumes      string
 	}{
 		DexImage:           dexImage,
+		DexConfigMapHash:   dexConfigMapHash,
 		ServiceAccountName: SERVICE_ACCOUNT_NAME,
 		// this secret is generated using service serving certificate via service annotation
 		// service.beta.openshift.io/serving-cert-secret-name: dexServer.Name-tls-secret
@@ -734,15 +762,65 @@ func (r *DexServerReconciler) syncIngress(dexServer *authv1alpha1.DexServer, ctx
 
 }
 
+// Rolling restarts are accomplished with an annotation on the pod template. Ignore this and resulting updates
+// to allow rolling restarts to complete successfully.
+func ignoreDeploymentRestartPredicate() predicate.Predicate {
+	// hold the generation of any deployment restarts in progress, by namespace and name
+	restartsInProgress := map[string]int64{}
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			if len(e.ObjectOld.GetOwnerReferences()) == 0 {
+				return false
+			} else if e.ObjectOld.GetOwnerReferences()[0].Kind != "DexServer" {
+				return false
+			}
+			namespacedName := fmt.Sprintf("%s:%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName())
+			log := ctrl.Log.WithName("controllers").WithName("dexserver").WithName("ignoreDeploymentRestartPredicate").WithValues("namespace", e.ObjectNew.GetNamespace(), "name", e.ObjectNew.GetName())
+			if restartInProgressGeneration, found := restartsInProgress[namespacedName]; found {
+				log.V(1).Info("restart in progress for deployment", "generation", restartInProgressGeneration)
+				if restartInProgressGeneration == e.ObjectNew.GetGeneration() {
+					log.V(1).Info("updates are due to restart in progress... ignore")
+					return false
+				} else {
+					log.V(1).Info("new generation detected", "generation", e.ObjectNew.GetGeneration())
+					delete(restartsInProgress, namespacedName)
+				}
+			}
+			log.V(1).Info("deployment updated", "generation", e.ObjectNew.GetGeneration())
+			oldDeployment := e.ObjectOld.(*appsv1.Deployment)
+			newDeployment := e.ObjectNew.(*appsv1.Deployment)
+
+			newPodSpecAnnotations := newDeployment.Spec.Template.ObjectMeta.Annotations
+			if newDeploymentRestartedAt, found := newPodSpecAnnotations["kubectl.kubernetes.io/restartedAt"]; found {
+				oldPodSpecAnnotations := oldDeployment.Spec.Template.ObjectMeta.Annotations
+				if len(oldPodSpecAnnotations) == 0 ||
+					(newDeploymentRestartedAt != oldPodSpecAnnotations["kubectl.kubernetes.io/restartedAt"]) {
+					// this is a new restart. don't process it. hold on to it so we can ignore future updates to the deployment from this same restart
+					restartsInProgress[namespacedName] = e.ObjectNew.GetGeneration()
+					log.V(1).Info("new restart detected", "generation", e.ObjectNew.GetGeneration())
+					return false
+				}
+			}
+			log.V(1).Info("deployment update not filtered out")
+			return true
+		},
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *DexServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+
+	deploymentOwnsOpts := []builder.OwnsOption{
+		builder.WithPredicates(ignoreDeploymentRestartPredicate()), // ignore deployment rolling restarts
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&authv1alpha1.DexServer{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&corev1.Secret{}).
-		Owns(&appsv1.Deployment{}).
+		Owns(&appsv1.Deployment{}, deploymentOwnsOpts...).
 		Owns(&networkingv1.Ingress{}).
 		Complete(r)
 }
