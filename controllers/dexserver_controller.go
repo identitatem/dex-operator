@@ -52,22 +52,11 @@ import (
 
 const (
 	SECRET_MTLS_NAME      = "grpc-mtls"
-	SECRET_MTLS_SUFFIX    = "-mtls"
 	SECRET_WEB_TLS_SUFFIX = "-tls-secret"
 	SERVICE_ACCOUNT_NAME  = "dex-operator-dexsso"
 	GRPC_SERVICE_NAME     = "grpc"
 	DEX_IMAGE_ENV_NAME    = "RELATED_IMAGE_DEX"
 )
-
-var (
-	ctls ClientTLS
-)
-
-type ClientTLS struct {
-	caPEM            *bytes.Buffer
-	clientPEM        *bytes.Buffer
-	clientPrivKeyPEM *bytes.Buffer
-}
 
 // DexServerReconciler reconciles a DexServer object
 type DexServerReconciler struct {
@@ -118,23 +107,10 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Prepare Mutual TLS for dex client to server connection
-	// TODO: Revisit this once cdoan finishes his multiple server refactor
-	if isNotDefinedMTLSSecret(dexServer, r, ctx) {
-		caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM, err := createMTLS(dexServer.Namespace)
-		if err != nil {
-			log.Error(err, "failed to generate ca, cert and key")
-			return ctrl.Result{}, err
-		}
-		spec := r.defineSecret(dexServer, caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM)
-		log.Info("Creating a new Secret", "Secret.Namespace", spec.Namespace, "Secret.Name", spec.Name)
-		if err := r.Create(ctx, spec); err != nil {
-			log.Error(err, "failed to create Secret", "Secret.Name", spec.Name)
-			return ctrl.Result{}, err
-		}
-		ctls.caPEM = caPEM
-		ctls.clientPEM = clientPEM
-		ctls.clientPrivKeyPEM = clientPrivKeyPEM
+	// Prepare Mutual TLS for gRPC connection
+	if err := r.configureMTLSSecret(dexServer, ctx); err != nil {
+		log.Error(err, "failed to configure mTLS Secret")
+		return ctrl.Result{}, err
 	}
 
 	if err := r.syncConfigMap(dexServer, ctx); err != nil {
@@ -157,11 +133,6 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	if err := r.syncClusterRole(dexServer, ctx); err != nil {
-		log.Error(err, "failed to sync ClusterRole")
-		return ctrl.Result{}, err
-	}
-
 	if err := r.syncClusterRoleBinding(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync ClusterRoleBinding")
 		return ctrl.Result{}, err
@@ -179,14 +150,6 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// // TODO(cdoan): check CA or CERT renew?
 	return ctrl.Result{}, nil
-}
-
-func isNotDefinedMTLSSecret(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
-	resource := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(SECRET_MTLS_NAME), Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
-		return true
-	}
-	return false
 }
 
 func getConnectorSecretFromRef(connector v1alpha1.ConnectorSpec, m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) (string, error) {
@@ -230,7 +193,7 @@ func getConnectorSecretFromRef(connector v1alpha1.ConnectorSpec, m *authv1alpha1
 }
 
 // Define the secret for grpc Mutual TLS. This secret is volume mounted on the dex instance pod. The client cert should be loaded by the gRPC client code.
-func (r *DexServerReconciler) defineSecret(m *authv1alpha1.DexServer, caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM *bytes.Buffer) *corev1.Secret {
+func (r *DexServerReconciler) defineMTLSSecret(m *authv1alpha1.DexServer, caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM *bytes.Buffer) *corev1.Secret {
 	labels := map[string]string{
 		"app": m.Name,
 	}
@@ -253,6 +216,33 @@ func (r *DexServerReconciler) defineSecret(m *authv1alpha1.DexServer, caPEM, caP
 	return secretSpec
 }
 
+func isNotDefinedMTLSSecret(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
+	resource := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(SECRET_MTLS_NAME), Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
+		return true
+	}
+	return false
+}
+
+func (r *DexServerReconciler) configureMTLSSecret(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
+	log := ctrllog.FromContext(ctx)
+	log.Info("configureMTLSSecret")
+	if isNotDefinedMTLSSecret(dexServer, r, ctx) {
+		caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM, err := generateMTLSCerts(dexServer.Namespace)
+		if err != nil {
+			log.Error(err, "failed to generate mTLS certs")
+			return err
+		}
+		spec := r.defineMTLSSecret(dexServer, caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM)
+		log.Info("Creating a new MTLS Secret", "Secret.Namespace", spec.Namespace, "Secret.Name", spec.Name)
+		if err := r.Create(ctx, spec); err != nil {
+			log.Error(err, "failed to create MTLS Secret", "Secret.Name", spec.Name)
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *DexServerReconciler) syncServiceAccount(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
 	log := ctrllog.FromContext(ctx)
 	log.Info("syncServiceAccount", "ServiceAccount.Name", SERVICE_ACCOUNT_NAME)
@@ -267,29 +257,6 @@ func (r *DexServerReconciler) syncServiceAccount(dexServer *authv1alpha1.DexServ
 
 	files := []string{
 		"dex-server/service_account.yaml",
-	}
-
-	applier, readerDeploy := r.getApplierAndReader(dexServer)
-	_, err := applier.ApplyDirectly(readerDeploy, values, false, "", files...)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *DexServerReconciler) syncClusterRole(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
-	log := ctrllog.FromContext(ctx)
-	log.Info("syncClusterRole", "ClusterRole.Name", SERVICE_ACCOUNT_NAME)
-
-	values := struct {
-		ClusterRoleName string
-	}{
-		ClusterRoleName: SERVICE_ACCOUNT_NAME,
-	}
-
-	files := []string{
-		"dex-server/cluster_role.yaml",
 	}
 
 	applier, readerDeploy := r.getApplierAndReader(dexServer)
@@ -807,8 +774,38 @@ func ignoreDeploymentRestartPredicate() predicate.Predicate {
 	}
 }
 
+func (r *DexServerReconciler) installClusterRole() error {
+	values := struct {
+		ClusterRoleName string
+	}{
+		ClusterRoleName: SERVICE_ACCOUNT_NAME,
+	}
+
+	files := []string{
+		"dex-server/cluster_role.yaml",
+	}
+
+	applierBuilder := &clusteradmapply.ApplierBuilder{}
+	applier := applierBuilder.
+		WithClient(r.KubeClient, r.APIExtensionClient, r.DynamicClient).
+		Build()
+
+	readerDeploy := deploy.GetScenarioResourcesReader()
+	_, err := applier.ApplyDirectly(readerDeploy, values, false, "", files...)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *DexServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+
+	// Set up the Cluster Role
+	if err := r.installClusterRole(); err != nil {
+		return err
+	}
 
 	deploymentOwnsOpts := []builder.OwnsOption{
 		builder.WithPredicates(ignoreDeploymentRestartPredicate()), // ignore deployment rolling restarts

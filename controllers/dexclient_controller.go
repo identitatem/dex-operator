@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -36,8 +37,7 @@ import (
 // DexClientReconciler reconciles a DexClient object
 type DexClientReconciler struct {
 	client.Client
-	Scheme       *runtime.Scheme
-	DexApiClient *dexapi.APIClient
+	Scheme *runtime.Scheme
 }
 
 //+kubebuilder:rbac:groups=auth.identitatem.io,resources=dexclients,verbs=get;list;watch;create;update;patch;delete
@@ -58,34 +58,46 @@ type DexClientReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
+	log.V(1).Info("Reconciling...")
+
 	dexv1Client := &authv1alpha1.DexClient{}
 	if err := r.Get(ctx, req.NamespacedName, dexv1Client); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log.Info("found dexclient", "DexClient.name", dexv1Client.Name, "DexClient.namespace", dexv1Client.Namespace)
+	log.Info("found dexclient", "DexClient.name", dexv1Client.Name, "DexClient.namespace", dexv1Client.Namespace, "DexClient.status.state", dexv1Client.Status.State)
 
-	switch {
-	case isMTLSSecretNotExists(r, dexv1Client, ctx):
-		// log.Info("MTLS secret not found, requeuing ...")
-		return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
-	case isgRPCConnection(r, dexv1Client, ctx):
-		dexApiOptions := &dexapi.Options{
-			HostAndPort: fmt.Sprintf("%s.%s.%s%s", GRPC_SERVICE_NAME, dexv1Client.Namespace, "svc.cluster.local", ":5557"),
-			CABuffer:    ctls.caPEM,
-			CrtBuffer:   ctls.clientPEM,
-			KeyBuffer:   ctls.clientPrivKeyPEM,
-		}
-		dexApiClient, err := dexapi.NewClientPEM(dexApiOptions)
-		if err != nil {
-			log.Error(err, "Failed to create api client connection to gRPC server", "client", dexv1Client.Name)
+	// If dex server and dex client are created at the same time, we may need to wait a few seconds for dex server reconciler
+	// to create the mtls certs
+	mTLSSecret, err := r.getMTLSSecret(dexv1Client, ctx)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
+		} else {
+			log.Error(err, "Error getting mTLS certificate to create api client connection to gRPC server", "client", dexv1Client.Name)
 			dexv1Client.Status.State = authv1alpha1.PhaseFailed
 			dexv1Client.Status.Message = err.Error()
 			return ctrl.Result{Requeue: true}, err
 		}
-		r.DexApiClient = dexApiClient
-	default:
 	}
+
+	// Fetch the mTLS client cert and create the grpc client
+
+	dexApiOptions := &dexapi.Options{
+		HostAndPort: fmt.Sprintf("%s.%s.%s%s", GRPC_SERVICE_NAME, dexv1Client.Namespace, "svc.cluster.local", ":5557"),
+		CABuffer:    bytes.NewBuffer(mTLSSecret.Data["ca.crt"]),
+		CrtBuffer:   bytes.NewBuffer(mTLSSecret.Data["client.crt"]),
+		KeyBuffer:   bytes.NewBuffer(mTLSSecret.Data["client.key"]),
+	}
+	dexApiClient, err := dexapi.NewClientPEM(dexApiOptions)
+	if err != nil {
+		log.Error(err, "Failed to create api client connection to gRPC server", "client", dexv1Client.Name)
+		dexv1Client.Status.State = authv1alpha1.PhaseFailed
+		dexv1Client.Status.Message = err.Error()
+		return ctrl.Result{Requeue: true}, err
+	}
+
+	defer dexApiClient.CloseConnection()
 
 	// if status is not set, set it to CREATING
 	if dexv1Client.Status.State == "" || dexv1Client.Status.State == authv1alpha1.PhaseCreating {
@@ -104,14 +116,14 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			"clientSecretRef", dexv1Client.Spec.ClientSecretRef.Name)
 
 		// read clientSecret from secret
-		dexclientclientSecret, err := getClientClientSecretFromRef(r, dexv1Client, ctx)
+		dexclientclientSecret, err := r.getClientClientSecretFromRef(dexv1Client, ctx)
 		if err != nil {
 			log.Error(err, "Client create failed", "client", dexv1Client.Name)
 			return r.updateStatus(ctx, dexv1Client, authv1alpha1.PhaseFailed, err)
 		}
 
 		// Implement dex auth client creation here
-		res, err := r.DexApiClient.CreateClient(
+		res, err := dexApiClient.CreateClient(
 			ctx,
 			dexv1Client.Spec.RedirectURIs,
 			dexv1Client.Spec.TrustedPeers,
@@ -132,7 +144,7 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	case authv1alpha1.PhaseActive:
 		// If the client is active but in the reconcile loop it's being updated.
 		log.Info("Client update", "client ID", dexv1Client.Name)
-		err := r.DexApiClient.UpdateClient(
+		err := dexApiClient.UpdateClient(
 			ctx,
 			dexv1Client.Spec.ClientID,
 			dexv1Client.Spec.RedirectURIs,
@@ -156,7 +168,8 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		log.Info("Got an invalid state", "state", dexv1Client.Status.State)
 		return ctrl.Result{}, nil
 	}
-	err := r.Status().Update(ctx, dexv1Client)
+
+	err = r.Status().Update(ctx, dexv1Client)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -178,10 +191,6 @@ func (r *DexClientReconciler) updateStatus(ctx context.Context, dexClient *authv
 	return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, inErr
 }
 
-func isgRPCConnection(r *DexClientReconciler, m *authv1alpha1.DexClient, ctx context.Context) bool {
-	return ctls.caPEM != nil && r.DexApiClient == nil
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *DexClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -190,7 +199,7 @@ func (r *DexClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func isMTLSSecretNotExists(r *DexClientReconciler, m *authv1alpha1.DexClient, ctx context.Context) bool {
+func (r *DexClientReconciler) getMTLSSecret(m *authv1alpha1.DexClient, ctx context.Context) (*corev1.Secret, error) {
 	// each dexserver will run in its own namespace
 	// the dex controller will connect to mulitple dexservers
 	// given a DexClient, the MTLS secret will be in the same namespace
@@ -198,15 +207,15 @@ func isMTLSSecretNotExists(r *DexClientReconciler, m *authv1alpha1.DexClient, ct
 	secretNamespace := m.Namespace
 
 	resource := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: SECRET_MTLS_NAME, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
+	if err := r.Get(ctx, types.NamespacedName{Name: SECRET_MTLS_NAME, Namespace: secretNamespace}, resource); err != nil {
 		// failed to find the secret, wait for the secret to exist
-		return true
+		return nil, err
 	}
 	// secret exists, continue reading MTLS and connect to GRPC
-	return false
+	return resource, nil
 }
 
-func getClientClientSecretFromRef(r *DexClientReconciler, m *authv1alpha1.DexClient, ctx context.Context) (string, error) {
+func (r *DexClientReconciler) getClientClientSecretFromRef(m *authv1alpha1.DexClient, ctx context.Context) (string, error) {
 	log := ctrllog.FromContext(ctx)
 	secretName := m.Spec.ClientSecretRef.Name
 	secretNamespace := m.Spec.ClientSecretRef.Namespace
