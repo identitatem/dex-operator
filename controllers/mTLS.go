@@ -30,7 +30,7 @@ func GetCertDuration() time.Duration {
 	return certDuration
 }
 
-func createMTLS(ns string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, error) {
+func generateMTLSCerts(ns string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, error) {
 	// TODO(cdoan): handle the error, and put this into a function to reuse
 	serialNumber, _ := rand.Int(rand.Reader, serialNumberLimit)
 	ca := &x509.Certificate{
