@@ -175,6 +175,33 @@ oc apply -f bundle/manifests/auth.identitatem.io_dexservers.yaml
 oc apply -f hack/deployment.yaml
 ```
 
+## Option 3: Local development
+
+Follow steps above to generate sample CRs and to create the bundle, which generates the Custom Resource Definitions. Once you've applied the CRDs, you can run the controller locally and use the sample CRs to trigger your reconcile loops.
+
+```bash
+oc new-project dex-operator
+oc apply -f bundle/manifests/auth.identitatem.io_dexclients.yaml
+oc apply -f bundle/manifests/auth.identitatem.io_dexservers.yaml
+export RELATED_IMAGE_DEX=quay.io/dexidp/dex:v2.28.1
+go run main.go
+```
+
+If you are testing with DexClients, some extra steps are necessary.
+
+1. Add the following to your `/etc/hosts` file:
+```bash
+127.0.0.1 	grpc.dex-operator.svc.cluster.local
+```
+If you are using a namespace other than `dex-operator`, update the line above accordingly.
+
+2. Once you've created a DexServer CR and the dex server pod is running, you'll need to do a port forward to allow the controller to make grpc calls to the dex server.
+```bash
+oc port-forward dex2-97d78b6d5-rg9d7 5557:5557
+```
+You'll replace the pod name above with your pod, retrieved via `oc get pods` in your namespace where the dex server is running.
+
+
 # References
 
 See Reference: https://hackmd.io/@0HKGaOf5Rg-SU-pJybkgKw/B1GhGowAO
