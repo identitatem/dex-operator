@@ -48,6 +48,7 @@ type Options struct {
 // APIClient represent a client wrapper for Dex
 type APIClient struct {
 	dex DexClient
+	cc  *grpc.ClientConn
 }
 
 func NewClientPEM(opts *Options) (*APIClient, error) {
@@ -75,6 +76,7 @@ func NewClientPEM(opts *Options) (*APIClient, error) {
 	}
 	return &APIClient{
 		dex: NewDexClient(conn),
+		cc:  conn,
 	}, nil
 }
 
@@ -108,6 +110,7 @@ func NewClient(opts *Options) (*APIClient, error) {
 	}
 	return &APIClient{
 		dex: NewDexClient(conn),
+		cc:  conn,
 	}, nil
 }
 
@@ -180,6 +183,15 @@ func (c *APIClient) DeleteClient(ctx context.Context, id string) error {
 	}
 	if res.NotFound {
 		return fmt.Errorf("delete did not find the client with id %q", id)
+	}
+	return nil
+}
+
+// CloseConnection calls Close on the ClientConn
+func (c *APIClient) CloseConnection() error {
+	err := c.cc.Close()
+	if err != nil {
+		return errors.Wrapf(err, "error occurred closing the connection")
 	}
 	return nil
 }
