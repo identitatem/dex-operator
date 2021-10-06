@@ -187,7 +187,7 @@ type DexServerSpec struct {
 }
 
 const (
-	DexServerConditionTypeReady string = "Ready"
+	DexServerConditionTypeApplied string = "Applied"
 )
 
 // DexServerStatus defines the observed state of DexServer

@@ -112,7 +112,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.configureMTLSSecret(dexServer, ctx); err != nil {
 		log.Error(err, "failed to configure mTLS Secret")
 		cond := metav1.Condition{
-			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
 			Status: metav1.ConditionFalse,
 			Reason: "ConfigMTLSSecretFailed",
 			Message: fmt.Sprintf("failed to configure MTLS secret. error: %s",
@@ -128,7 +128,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.syncConfigMap(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync ConfigMap")
 		cond := metav1.Condition{
-			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
 			Status: metav1.ConditionFalse,
 			Reason: "ConfigMapFailed",
 			Message: fmt.Sprintf("failed to sync ConfigMap. error: %s",
@@ -143,7 +143,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.syncService(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync http service")
 		cond := metav1.Condition{
-			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
 			Status: metav1.ConditionFalse,
 			Reason: "ConfigHTTPServiceFailed",
 			Message: fmt.Sprintf("failed to sync http service. error: %s",
@@ -158,7 +158,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.syncServiceGrpc(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync grpc Service")
 		cond := metav1.Condition{
-			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
 			Status: metav1.ConditionFalse,
 			Reason: "ConfigGRPCServiceFailed",
 			Message: fmt.Sprintf("failed to sync grpc service. error: %s",
@@ -174,7 +174,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.syncServiceAccount(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync ServiceAccount")
 		cond := metav1.Condition{
-			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
 			Status: metav1.ConditionFalse,
 			Reason: "ConfigServiceAccountFailed",
 			Message: fmt.Sprintf("failed to sync ServiceAccount. error: %s",
@@ -189,7 +189,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.syncClusterRoleBinding(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync ClusterRoleBinding")
 		cond := metav1.Condition{
-			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
 			Status: metav1.ConditionFalse,
 			Reason: "ConfigClusterRoleBindingFailed",
 			Message: fmt.Sprintf("failed to sync ClusterRoleBinding. error: %s",
@@ -204,7 +204,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.syncDeployment(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync Deployment")
 		cond := metav1.Condition{
-			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
 			Status: metav1.ConditionFalse,
 			Reason: "ConfigDeploymentFailed",
 			Message: fmt.Sprintf("failed to sync Deployment. error: %s",
@@ -219,7 +219,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.syncIngress(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync Ingress")
 		cond := metav1.Condition{
-			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
 			Status: metav1.ConditionFalse,
 			Reason: "ConfigIngressFailed",
 			Message: fmt.Sprintf("failed to sync Ingress. error: %s",
@@ -233,10 +233,10 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// // TODO(cdoan): check CA or CERT renew?
 	cond := metav1.Condition{
-		Type:    authv1alpha1.DexServerConditionTypeReady,
+		Type:    authv1alpha1.DexServerConditionTypeApplied,
 		Status:  metav1.ConditionTrue,
-		Reason:  "Running",
-		Message: "DexServer is running",
+		Reason:  "Applied",
+		Message: "DexServer is applied",
 	}
 	if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
 		return ctrl.Result{}, err
