@@ -197,7 +197,7 @@ type DexServerStatus struct {
 	// +optional
 	Message string `json:"message,omitempty"`
 	// +optional
-	RelatedObjects []RelatedObjectReference `json:"relatedObjects"`
+	RelatedObjects []RelatedObjectReference `json:"relatedObjects,omitempty"`
 	// Conditions contains the different condition statuses for this DexServer.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
