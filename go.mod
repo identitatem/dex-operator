@@ -3,13 +3,14 @@ module github.com/identitatem/dex-operator
 go 1.16
 
 require (
+	github.com/dexidp/dex/api/v2 v2.0.0
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.14.0
 	github.com/openshift/api v0.0.0-20210915110300-3cd8091317c4 //Openshift 4.6
 	github.com/pkg/errors v0.9.1
 	google.golang.org/grpc v1.40.0
-	google.golang.org/protobuf v1.27.1
+	google.golang.org/protobuf v1.27.1 // indirect
 	k8s.io/api v0.22.1
 	k8s.io/apiextensions-apiserver v0.22.1
 	k8s.io/apimachinery v0.22.1

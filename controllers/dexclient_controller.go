@@ -31,7 +31,7 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
-	dexapi "github.com/identitatem/dex-operator/pkg/api"
+	dexapi "github.com/identitatem/dex-operator/controllers/dex"
 )
 
 // DexClientReconciler reconciles a DexClient object
@@ -118,7 +118,7 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// read clientSecret from secret
 		dexclientclientSecret, err := r.getClientClientSecretFromRef(dexv1Client, ctx)
 		if err != nil {
-			log.Error(err, "Client create failed", "client", dexv1Client.Name)
+			log.Error(err, "Client create failed on client secret", "client", dexv1Client.Name)
 			return r.updateStatus(ctx, dexv1Client, authv1alpha1.PhaseFailed, err)
 		}
 
