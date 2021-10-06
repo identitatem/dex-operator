@@ -115,7 +115,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			Type:   authv1alpha1.DexServerConditionTypeReady,
 			Status: metav1.ConditionFalse,
 			Reason: "ConfigMTLSSecretFailed",
-			Message: fmt.Sprintf("failed to cofigure MTLS secret. error: %s",
+			Message: fmt.Sprintf("failed to configure MTLS secret. error: %s",
 				err.Error()),
 		}
 		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
@@ -127,36 +127,107 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if err := r.syncConfigMap(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync ConfigMap")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigMapFailed",
+			Message: fmt.Sprintf("failed to sync ConfigMap. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncService(dexServer, ctx); err != nil {
-		log.Error(err, "failed to sync http Service")
+		log.Error(err, "failed to sync http service")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigHTTPServiceFailed",
+			Message: fmt.Sprintf("failed to sync http service. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncServiceGrpc(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync grpc Service")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigGRPCServiceFailed",
+			Message: fmt.Sprintf("failed to sync grpc service. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
+
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncServiceAccount(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync ServiceAccount")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigServiceAccountFailed",
+			Message: fmt.Sprintf("failed to sync ServiceAccount. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncClusterRoleBinding(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync ClusterRoleBinding")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigClusterRoleBindingFailed",
+			Message: fmt.Sprintf("failed to sync ClusterRoleBinding. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncDeployment(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync Deployment")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigDeploymentFailed",
+			Message: fmt.Sprintf("failed to sync Deployment. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncIngress(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync Ingress")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeReady,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigIngressFailed",
+			Message: fmt.Sprintf("failed to sync Ingress. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
