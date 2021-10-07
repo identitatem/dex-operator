@@ -108,6 +108,8 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	log.V(1).Info("DexServer ", "name:", dexServer.Name, "namespace:", dexServer.Namespace)
+
 	// Prepare Mutual TLS for gRPC connection
 	if err := r.configureMTLSSecret(dexServer, ctx); err != nil {
 		log.Error(err, "failed to configure mTLS Secret")
