@@ -22,16 +22,32 @@ const (
 
 var (
 	serialNumberLimit = new(big.Int).Lsh(big.NewInt(1), 128)
-	dns               = []string{}
 	certDuration      = time.Hour * 24
+	certRenewalWindow = time.Hour * 2 // roll the cert when we get within this window of expiring
 )
 
 func GetCertDuration() time.Duration {
 	return certDuration
 }
 
-func generateMTLSCerts(ns string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer, error) {
+type MTLSCerts struct {
+	caPEM            *bytes.Buffer
+	caPrivKeyPEM     *bytes.Buffer
+	certPEM          *bytes.Buffer
+	certPrivKeyPEM   *bytes.Buffer
+	clientPEM        *bytes.Buffer
+	clientPrivKeyPEM *bytes.Buffer
+	expiry           time.Time
+}
+
+func inCertRenewalWindow(expiry time.Time) bool {
+	return time.Now().Add(certRenewalWindow).After(expiry)
+}
+
+func generateMTLSCerts(ns string) (*MTLSCerts, error) {
 	// TODO(cdoan): handle the error, and put this into a function to reuse
+	now := time.Now()
+	expiry := now.Add(GetCertDuration())
 	serialNumber, _ := rand.Int(rand.Reader, serialNumberLimit)
 	ca := &x509.Certificate{
 		// SerialNumber: big.NewInt(2019),
@@ -41,8 +57,8 @@ func generateMTLSCerts(ns string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, 
 			Country:      []string{"US"},
 			CommonName:   getServiceName(ns),
 		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(GetCertDuration()),
+		NotBefore:             now,
+		NotAfter:              expiry,
 		IsCA:                  true,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageCertSign,
@@ -51,12 +67,12 @@ func generateMTLSCerts(ns string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, 
 	// generate a private key
 	caPrivKey, err := rsa.GenerateKey(rand.Reader, PRIVATE_KEY_SIZE)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, err
 	}
 
 	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caPrivKey.PublicKey, caPrivKey)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, err
 	}
 	// convert to PEM
 	caPEM, caPrivKeyPEM := PEMEncode(caBytes, caPrivKey)
@@ -69,8 +85,8 @@ func generateMTLSCerts(ns string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, 
 			CommonName:   getServiceName(ns),
 		},
 		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(GetCertDuration()),
+		NotBefore:    now,
+		NotAfter:     expiry,
 		SubjectKeyId: []byte{1, 2, 3, 4, 6},
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
@@ -80,13 +96,13 @@ func generateMTLSCerts(ns string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, 
 
 	certPrivKey, err := rsa.GenerateKey(rand.Reader, PRIVATE_KEY_SIZE)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, err
 	}
 
 	// SIGN the cert/key with the previous CA
 	certBytes, err := x509.CreateCertificate(rand.Reader, cert, ca, &certPrivKey.PublicKey, caPrivKey)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, err
 	}
 
 	// convert the server cert/key to PEM Encoiding
@@ -101,8 +117,8 @@ func generateMTLSCerts(ns string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, 
 			CommonName:   getServiceName(ns),
 		},
 		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(GetCertDuration()),
+		NotBefore:    now,
+		NotAfter:     expiry,
 		SubjectKeyId: []byte{1, 2, 3, 4, 6},
 		// ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
@@ -110,13 +126,13 @@ func generateMTLSCerts(ns string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, 
 	}
 	clientPrivKey, err := rsa.GenerateKey(rand.Reader, PRIVATE_KEY_SIZE)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, err
 	}
 
 	// SIGN the cert/key with the previous CA
 	clientBytes, err := x509.CreateCertificate(rand.Reader, client, ca, &clientPrivKey.PublicKey, caPrivKey)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, err
 	}
 
 	// convert the server cert/key to PEM Encoiding
@@ -145,7 +161,15 @@ func generateMTLSCerts(ns string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, 
 	// bufferToFile("client.crt", clientPEM.Bytes())
 	// bufferToFile("client.key", clientPrivKeyPEM.Bytes())
 
-	return caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM, nil
+	return &MTLSCerts{
+		caPEM:            caPEM,
+		caPrivKeyPEM:     caPrivKeyPEM,
+		certPEM:          certPEM,
+		certPrivKeyPEM:   certPrivKeyPEM,
+		clientPEM:        clientPEM,
+		clientPrivKeyPEM: clientPrivKeyPEM,
+		expiry:           expiry,
+	}, nil
 }
 
 func PEMEncode(caBytes []byte, caPrivKey *rsa.PrivateKey) (*bytes.Buffer, *bytes.Buffer) {
