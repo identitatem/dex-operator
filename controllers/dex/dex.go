@@ -10,7 +10,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package api
+package dex
 
 import (
 	"bytes"
@@ -18,8 +18,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 
+	api "github.com/dexidp/dex/api/v2"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -30,24 +30,16 @@ type Options struct {
 	// HostAndPort host name and port of gRPC server
 	HostAndPort string
 	// ClientCrt TLS certificate for gRPC client
-	ClientCrt string
-	// ClientKey TLS certificate key for gRPC client
-	ClientKey string
-	// ClientCA self signed CA certificate for gRPC TLS connection
-	ClientCA string
-
-	ClientCrtBytes []byte
-	ClientKeyBytes []byte
-	ClientCABytes  []byte
-
-	CABuffer  *bytes.Buffer
 	CrtBuffer *bytes.Buffer
+	// ClientKey TLS certificate key for gRPC client
 	KeyBuffer *bytes.Buffer
+	// ClientCA self signed CA certificate for gRPC TLS connection
+	CABuffer *bytes.Buffer
 }
 
 // APIClient represent a client wrapper for Dex
 type APIClient struct {
-	dex DexClient
+	dex api.DexClient
 	cc  *grpc.ClientConn
 }
 
@@ -70,53 +62,19 @@ func NewClientPEM(opts *Options) (*APIClient, error) {
 	}
 	creds := credentials.NewTLS(clientTLSConfig)
 
-	conn, err := grpc.Dial(opts.HostAndPort, grpc.WithTransportCredentials(creds), grpc.WithBlock())
+	conn, err := grpc.Dial(opts.HostAndPort, grpc.WithTransportCredentials(creds), grpc.WithBlock(), grpc.FailOnNonTempDialError(true))
 	if err != nil {
 		return nil, errors.Wrapf(err, "opening the gRPC connection with server %q", opts.HostAndPort)
 	}
 	return &APIClient{
-		dex: NewDexClient(conn),
-		cc:  conn,
-	}, nil
-}
-
-// NewClient creates a new Dex client
-func NewClient(opts *Options) (*APIClient, error) {
-	certPool := x509.NewCertPool()
-	caCert, err := ioutil.ReadFile(opts.ClientCA) // #nosec
-	if err != nil {
-		return nil, errors.Wrapf(err, "reading the public CA cert from %q", opts.ClientCA)
-	}
-	appended := certPool.AppendCertsFromPEM(caCert)
-	if !appended {
-		return nil, errors.New("failed to append the CA cert to the certs pool")
-	}
-
-	clientCert, err := tls.LoadX509KeyPair(opts.ClientCrt, opts.ClientKey)
-	if err != nil {
-		return nil, errors.Wrapf(err, "loading the client cert %q and private key %q",
-			opts.ClientCrt, opts.ClientKey)
-	}
-
-	clientTLSConfig := &tls.Config{
-		RootCAs:      certPool,
-		Certificates: []tls.Certificate{clientCert},
-	}
-	creds := credentials.NewTLS(clientTLSConfig)
-
-	conn, err := grpc.Dial(opts.HostAndPort, grpc.WithTransportCredentials(creds), grpc.WithBlock())
-	if err != nil {
-		return nil, errors.Wrapf(err, "opening the gRPC connection with server %q", opts.HostAndPort)
-	}
-	return &APIClient{
-		dex: NewDexClient(conn),
+		dex: api.NewDexClient(conn),
 		cc:  conn,
 	}, nil
 }
 
 // GetServerInfo returns server info
 func (c *APIClient) GetServerInfo(ctx context.Context) (string, error) {
-	req := &VersionReq{}
+	req := &api.VersionReq{}
 	res, err := c.dex.GetVersion(ctx, req)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to to get DEX version")
@@ -124,11 +82,16 @@ func (c *APIClient) GetServerInfo(ctx context.Context) (string, error) {
 	return res.Server, nil
 }
 
+type CreateClientError struct {
+	ApiError      error
+	AlreadyExists bool
+}
+
 // CreateClient a new OIDC client in Dex
 func (c *APIClient) CreateClient(ctx context.Context, redirectUris []string, trustedPeers []string,
-	public bool, name string, id string, logoURL string, secret string) (*Client, error) {
-	req := &CreateClientReq{
-		Client: &Client{
+	public bool, name string, id string, logoURL string, secret string) (*api.Client, *CreateClientError) {
+	req := &api.CreateClientReq{
+		Client: &api.Client{
 			RedirectUris: redirectUris,
 			TrustedPeers: trustedPeers,
 			Public:       public,
@@ -141,11 +104,11 @@ func (c *APIClient) CreateClient(ctx context.Context, redirectUris []string, tru
 
 	res, err := c.dex.CreateClient(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create the OIDC client")
+		return nil, &CreateClientError{errors.Wrap(err, "failed to create the OIDC client"), false}
 	}
 
 	if res.AlreadyExists {
-		return nil, errors.Errorf("client %q already exists", id)
+		return nil, &CreateClientError{errors.Errorf("client %q already exists", id), true}
 	}
 
 	return res.Client, nil
@@ -154,7 +117,7 @@ func (c *APIClient) CreateClient(ctx context.Context, redirectUris []string, tru
 // UpdateClient updates an already registered OIDC client
 func (c *APIClient) UpdateClient(ctx context.Context, clientID string, redirectUris []string,
 	trustedPeers []string, public bool, name string, logoURL string) error {
-	req := &UpdateClientReq{
+	req := &api.UpdateClientReq{
 		Id:           clientID,
 		RedirectUris: redirectUris,
 		TrustedPeers: trustedPeers,
@@ -174,7 +137,7 @@ func (c *APIClient) UpdateClient(ctx context.Context, clientID string, redirectU
 
 // DeleteClient deletes the client with given Id from Dex
 func (c *APIClient) DeleteClient(ctx context.Context, id string) error {
-	req := &DeleteClientReq{
+	req := &api.DeleteClientReq{
 		Id: id,
 	}
 	res, err := c.dex.DeleteClient(ctx, req)
