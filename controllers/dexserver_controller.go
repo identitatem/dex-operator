@@ -17,21 +17,22 @@ limitations under the License.
 package controllers
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/ghodss/yaml"
+	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -52,11 +53,12 @@ import (
 )
 
 const (
-	SECRET_MTLS_NAME      = "grpc-mtls"
-	SECRET_WEB_TLS_SUFFIX = "-tls-secret"
-	SERVICE_ACCOUNT_NAME  = "dex-operator-dexsso"
-	GRPC_SERVICE_NAME     = "grpc"
-	DEX_IMAGE_ENV_NAME    = "RELATED_IMAGE_DEX"
+	SECRET_MTLS_NAME            = "grpc-mtls"
+	SECRET_WEB_TLS_SUFFIX       = "-tls-secret"
+	SERVICE_ACCOUNT_NAME        = "dex-operator-dexsso"
+	GRPC_SERVICE_NAME           = "grpc"
+	DEX_IMAGE_ENV_NAME          = "RELATED_IMAGE_DEX"
+	MTLS_CERT_EXPIRY_ANNOTATION = "auth.identitatem.io/expiry"
 )
 
 // DexServerReconciler reconciles a DexServer object
@@ -109,8 +111,8 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Prepare Mutual TLS for gRPC connection
-	if err := r.configureMTLSSecret(dexServer, ctx); err != nil {
-		log.Error(err, "failed to configure mTLS Secret")
+	if err := r.manageMTLSSecret(dexServer, ctx); err != nil {
+		log.Error(err, "failed to manage mtls secret")
 		cond := metav1.Condition{
 			Type:   authv1alpha1.DexServerConditionTypeApplied,
 			Status: metav1.ConditionFalse,
@@ -121,7 +123,6 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
 			return ctrl.Result{}, err
 		}
-
 		return ctrl.Result{}, err
 	}
 
@@ -231,7 +232,6 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	// // TODO(cdoan): check CA or CERT renew?
 	cond := metav1.Condition{
 		Type:    authv1alpha1.DexServerConditionTypeApplied,
 		Status:  metav1.ConditionTrue,
@@ -241,7 +241,8 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{}, nil
+	// Reconcile hourly to ensure grpc mtls certs are regenerated before expiry
+	return ctrl.Result{Requeue: true, RequeueAfter: 1 * time.Hour}, nil
 }
 
 func getConnectorSecretFromRef(connector authv1alpha1.ConnectorSpec, m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) (string, error) {
@@ -254,7 +255,7 @@ func getConnectorSecretFromRef(connector authv1alpha1.ConnectorSpec, m *authv1al
 			secretNamespace = m.Namespace
 		}
 		resource := &corev1.Secret{}
-		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
+		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && kubeerrors.IsNotFound(err) {
 			return "", err
 		}
 		return string(resource.Data["clientSecret"]), nil
@@ -264,7 +265,7 @@ func getConnectorSecretFromRef(connector authv1alpha1.ConnectorSpec, m *authv1al
 			secretNamespace = m.Namespace
 		}
 		resource := &corev1.Secret{}
-		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
+		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && kubeerrors.IsNotFound(err) {
 			return "", err
 		}
 		return string(resource.Data["clientSecret"]), nil
@@ -274,7 +275,7 @@ func getConnectorSecretFromRef(connector authv1alpha1.ConnectorSpec, m *authv1al
 			secretNamespace = m.Namespace
 		}
 		resource := &corev1.Secret{}
-		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
+		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && kubeerrors.IsNotFound(err) {
 			return "", err
 		}
 		return string(resource.Data["bindPW"]), nil
@@ -285,52 +286,92 @@ func getConnectorSecretFromRef(connector authv1alpha1.ConnectorSpec, m *authv1al
 }
 
 // Define the secret for grpc Mutual TLS. This secret is volume mounted on the dex instance pod. The client cert should be loaded by the gRPC client code.
-func (r *DexServerReconciler) defineMTLSSecret(m *authv1alpha1.DexServer, caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM *bytes.Buffer) *corev1.Secret {
+func (r *DexServerReconciler) defineMTLSSecret(m *authv1alpha1.DexServer, mtlsCerts *MTLSCerts) *corev1.Secret {
 	labels := map[string]string{
 		"app": m.Name,
 	}
+	annotations := map[string]string{
+		MTLS_CERT_EXPIRY_ANNOTATION: mtlsCerts.expiry.UTC().Format(time.RFC3339),
+	}
 	secretSpec := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      SECRET_MTLS_NAME,
-			Namespace: m.Namespace,
-			Labels:    labels,
+			Name:        SECRET_MTLS_NAME,
+			Namespace:   m.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Data: map[string][]byte{
-			"ca.crt":     caPEM.Bytes(),
-			"ca.key":     caPrivKeyPEM.Bytes(),
-			"tls.crt":    append(certPEM.Bytes(), certPEM.Bytes()...),
-			"tls.key":    certPrivKeyPEM.Bytes(),
-			"client.crt": append(clientPEM.Bytes(), clientPEM.Bytes()...),
-			"client.key": clientPrivKeyPEM.Bytes(),
+			"ca.crt":     mtlsCerts.caPEM.Bytes(),
+			"ca.key":     mtlsCerts.caPrivKeyPEM.Bytes(),
+			"tls.crt":    append(mtlsCerts.certPEM.Bytes(), mtlsCerts.certPEM.Bytes()...),
+			"tls.key":    mtlsCerts.certPrivKeyPEM.Bytes(),
+			"client.crt": append(mtlsCerts.clientPEM.Bytes(), mtlsCerts.clientPEM.Bytes()...),
+			"client.key": mtlsCerts.clientPrivKeyPEM.Bytes(),
 		},
 	}
 	ctrl.SetControllerReference(m, secretSpec, r.Scheme)
 	return secretSpec
 }
 
-func isNotDefinedMTLSSecret(m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) bool {
+func (r *DexServerReconciler) getMTLSSecret(m *authv1alpha1.DexServer, ctx context.Context) (*corev1.Secret, error) {
 	resource := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(SECRET_MTLS_NAME), Namespace: m.Namespace}, resource); err != nil && errors.IsNotFound(err) {
-		return true
+	if err := r.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(SECRET_MTLS_NAME), Namespace: m.Namespace}, resource); err != nil {
+		return nil, err
 	}
-	return false
+	return resource, nil
 }
 
-func (r *DexServerReconciler) configureMTLSSecret(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
+func (r *DexServerReconciler) manageMTLSSecret(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
 	log := ctrllog.FromContext(ctx)
-	log.Info("configureMTLSSecret")
-	if isNotDefinedMTLSSecret(dexServer, r, ctx) {
-		caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM, err := generateMTLSCerts(dexServer.Namespace)
+	log.V(1).Info("manageMTLSSecret")
+	secretExists := false
+	regenerate := false
+	secret, err := r.getMTLSSecret(dexServer, ctx)
+	if err != nil {
+		if !kubeerrors.IsNotFound(err) {
+			return errors.Wrap(err, "error getting mtls secret")
+		}
+	} else {
+		secretExists = true
+		// check if cert is expiring soon...
+		expiry := secret.Annotations[MTLS_CERT_EXPIRY_ANNOTATION]
+		if expiry == "" {
+			// expiration annotation is missing... something is amiss... let's regenerate
+			regenerate = true
+		} else {
+			expiryTime, err := time.Parse(time.RFC3339, expiry)
+			if err != nil {
+				//something unexpected found in the expiry annotation ... something is amiss ... let's regenerate
+				log.Error(err, "cert expiry could not be parsed")
+				regenerate = true
+			}
+			if inCertRenewalWindow(expiryTime) {
+				log.V(1).Info("mtls cert is nearing expiration... regenerate")
+				regenerate = true
+			}
+
+		}
+	}
+	if !secretExists || regenerate {
+		mTLSCerts, err := generateMTLSCerts(dexServer.Namespace)
 		if err != nil {
-			log.Error(err, "failed to generate mTLS certs")
-			return err
+			return errors.Wrap(err, "error generating mtls certs")
 		}
-		spec := r.defineMTLSSecret(dexServer, caPEM, caPrivKeyPEM, certPEM, certPrivKeyPEM, clientPEM, clientPrivKeyPEM)
-		log.Info("Creating a new MTLS Secret", "Secret.Namespace", spec.Namespace, "Secret.Name", spec.Name)
-		if err := r.Create(ctx, spec); err != nil {
-			log.Error(err, "failed to create MTLS Secret", "Secret.Name", spec.Name)
-			return err
+		spec := r.defineMTLSSecret(dexServer, mTLSCerts)
+		if !secretExists {
+			log.Info("Creating a new MTLS Secret", "Secret.Namespace", spec.Namespace, "Secret.Name", spec.Name)
+			if err := r.Create(ctx, spec); err != nil {
+				return errors.Wrap(err, "error creating mtls secret")
+			}
+		} else {
+			log.Info("Updating MTLS Secret", "Secret.Namespace", spec.Namespace, "Secret.Name", spec.Name)
+			if err := r.Update(ctx, spec); err != nil {
+				return errors.Wrap(err, "error updating mtls secret")
+			}
 		}
+
+	} else {
+		log.V(1).Info("mtls cert found and does not require renewal")
 	}
 	return nil
 }
@@ -449,7 +490,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	var dexConfigMapHash string
 	if err := r.Get(ctx, types.NamespacedName{Name: dexServer.Name, Namespace: dexServer.Namespace}, dexConfigMap); err != nil {
 		// If ConfigMap is not yet found, the annotation will be omitted, and will be added once the ConfigMap is created
-		if !errors.IsNotFound(err) {
+		if !kubeerrors.IsNotFound(err) {
 			log.Error(err, "error getting dex server configmap")
 			return err
 		}
@@ -464,6 +505,15 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 		dexConfigMapHash = fmt.Sprintf("%x", h.Sum(nil))
 		// log.Info("computed hash", "dexConfigMapHash", dexConfigMapHash)
 	}
+	var mtlsSecretExpiry string
+	if mtlsSecret, err := r.getMTLSSecret(dexServer, ctx); err != nil {
+		// If mtls secret is not yet found, the annotation will be omitted, and will be added once the secret is created
+		if !kubeerrors.IsNotFound(err) {
+			return errors.Wrap(err, "error getting dex server grpc mtls secret")
+		}
+	} else {
+		mtlsSecretExpiry = mtlsSecret.Annotations[MTLS_CERT_EXPIRY_ANNOTATION]
+	}
 
 	values := struct {
 		DexImage               string
@@ -471,6 +521,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 		ServiceAccountName     string
 		TlsSecretName          string
 		MtlsSecretName         string
+		MtlsSecretExpiry       string
 		DexServer              *authv1alpha1.DexServer
 		AdditionalVolumeMounts string
 		AdditionalVolumes      string
@@ -484,6 +535,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 		// This secret is generated by this controller, here we load the server side cert and ca
 		// service.beta.openshift.io/serving-cert-secret-name: dexServer.Name-mtls-secret
 		MtlsSecretName:         SECRET_MTLS_NAME,
+		MtlsSecretExpiry:       mtlsSecretExpiry,
 		DexServer:              dexServer,
 		AdditionalVolumeMounts: string(additionalVolumeMountsYaml),
 		AdditionalVolumes:      string(additionalVolumesYaml),
@@ -679,7 +731,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 					secretNamespace = dexServer.Namespace
 				}
 				resource := &corev1.Secret{}
-				if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && errors.IsNotFound(err) {
+				if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && kubeerrors.IsNotFound(err) {
 					// Error getting secret
 					log.Error(err, "Error getting root CA")
 					return nil
