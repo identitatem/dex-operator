@@ -45,14 +45,18 @@ type DexClientSpec struct {
 	LogoURL string `json:"logoURL,omitempty"`
 }
 
+const (
+	DexClientConditionTypeApplied             string = "Applied"
+	DexClientConditionTypeOAuth2ClientCreated string = "OAuth2ClientCreated"
+)
+
 // DexClientStatus defines the observed state of DexClient
 type DexClientStatus struct {
 	// +optional
-	State string `json:"state,omitempty"`
-	// +optional
-	Message string `json:"message,omitempty"`
-	// +optional
 	RelatedObjects []RelatedObjectReference `json:"relatedObjects,omitempty"`
+	// Conditions contains the different condition statuses for this DexClient.
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true

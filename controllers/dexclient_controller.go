@@ -23,12 +23,17 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
 	dexapi "github.com/identitatem/dex-operator/controllers/dex"
@@ -65,19 +70,35 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log.Info("found dexclient", "DexClient.name", dexv1Client.Name, "DexClient.namespace", dexv1Client.Namespace, "DexClient.status.state", dexv1Client.Status.State)
+	log.Info("found dexclient", "DexClient.name", dexv1Client.Name, "DexClient.namespace", dexv1Client.Namespace)
 
 	// If dex server and dex client are created at the same time, we may need to wait a few seconds for dex server reconciler
 	// to create the mtls certs
 	mTLSSecret, err := r.getMTLSSecret(dexv1Client, ctx)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			cond := metav1.Condition{
+				Type:    authv1alpha1.DexClientConditionTypeApplied,
+				Status:  metav1.ConditionFalse,
+				Reason:  "MTLSSecretNotFound",
+				Message: "waiting for dex server mtls certificates",
+			}
+			if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
+				return ctrl.Result{}, err
+			}
 			return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
 		} else {
 			log.Error(err, "Error getting mTLS certificate to create api client connection to gRPC server", "client", dexv1Client.Name)
-			dexv1Client.Status.State = authv1alpha1.PhaseFailed
-			dexv1Client.Status.Message = err.Error()
-			return ctrl.Result{Requeue: true}, err
+			cond := metav1.Condition{
+				Type:    authv1alpha1.DexClientConditionTypeApplied,
+				Status:  metav1.ConditionFalse,
+				Reason:  "MTLSSecretCheckFailed",
+				Message: fmt.Sprintf("failed checking MTLS secret. error: %s", err.Error()),
+			}
+			if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, err
 		}
 	}
 
@@ -92,21 +113,21 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	dexApiClient, err := dexapi.NewClientPEM(dexApiOptions)
 	if err != nil {
 		log.Error(err, "Failed to create api client connection to gRPC server", "client", dexv1Client.Name)
-		dexv1Client.Status.State = authv1alpha1.PhaseFailed
-		dexv1Client.Status.Message = err.Error()
-		return ctrl.Result{Requeue: true}, err
+		cond := metav1.Condition{
+			Type:    authv1alpha1.DexClientConditionTypeApplied,
+			Status:  metav1.ConditionFalse,
+			Reason:  "GRPCConnectionFailed",
+			Message: fmt.Sprintf("failed creating api client connection to gRPC server. error: %s", err.Error()),
+		}
+		if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, err
 	}
 
 	defer dexApiClient.CloseConnection()
 
-	// if status is not set, set it to CREATING
-	if dexv1Client.Status.State == "" || dexv1Client.Status.State == authv1alpha1.PhaseCreating {
-		dexv1Client.Status.State = authv1alpha1.PhaseCreating
-	}
-	// Now let's make the main case distinction: implementing
-	// the state diagram CREATING -> ACTIVE or CREATING -> FAILED
-	switch dexv1Client.Status.State {
-	case authv1alpha1.PhaseCreating:
+	if !isOAuth2ClientCreated(dexv1Client.Status.Conditions) {
 		log.Info("Creating dex client", "name", dexv1Client.Name,
 			"redirectURIs", dexv1Client.Spec.RedirectURIs,
 			"TrustedPeers", dexv1Client.Spec.TrustedPeers,
@@ -119,11 +140,19 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		dexclientclientSecret, err := r.getClientClientSecretFromRef(dexv1Client, ctx)
 		if err != nil {
 			log.Error(err, "Client create failed on client secret", "client", dexv1Client.Name)
-			return r.updateStatus(ctx, dexv1Client, authv1alpha1.PhaseFailed, err)
+			cond := metav1.Condition{
+				Type:    authv1alpha1.DexClientConditionTypeApplied,
+				Status:  metav1.ConditionFalse,
+				Reason:  "DexClientSecretFailed",
+				Message: fmt.Sprintf("failed getting client secret. error: %s", err.Error()),
+			}
+			if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, err
 		}
-
 		// Implement dex auth client creation here
-		res, err := dexApiClient.CreateClient(
+		res, createClientError := dexApiClient.CreateClient(
 			ctx,
 			dexv1Client.Spec.RedirectURIs,
 			dexv1Client.Spec.TrustedPeers,
@@ -133,16 +162,51 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			dexv1Client.Spec.LogoURL,
 			dexclientclientSecret,
 		)
-		if err != nil {
-			log.Error(err, "Client create failed", "client", dexv1Client.Name)
-			return r.updateStatus(ctx, dexv1Client, authv1alpha1.PhaseFailed, err)
+		if createClientError != nil {
+			if createClientError.AlreadyExists {
+				// We didn't expect an oauth2client, but it's there... requeue to call UpdateClient instead
+				cond := metav1.Condition{
+					Type:    authv1alpha1.DexClientConditionTypeOAuth2ClientCreated,
+					Status:  metav1.ConditionTrue,
+					Reason:  "Exists",
+					Message: "oauth2client found",
+				}
+				if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{Requeue: true}, nil
+			} else {
+				log.Error(createClientError.ApiError, "Client create failed", "client", dexv1Client.Name)
+				cond := metav1.Condition{
+					Type:    authv1alpha1.DexClientConditionTypeApplied,
+					Status:  metav1.ConditionFalse,
+					Reason:  "DexClientCreateFailed",
+					Message: fmt.Sprintf("failed creating client. error: %s", createClientError.ApiError.Error()),
+				}
+				if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{}, createClientError.ApiError
+			}
 		} else {
-			dexv1Client.Status.State = authv1alpha1.PhaseActive
 			log.Info("Client created", "client ID", res.GetId())
+			condApplied := metav1.Condition{
+				Type:    authv1alpha1.DexClientConditionTypeApplied,
+				Status:  metav1.ConditionTrue,
+				Reason:  "Created",
+				Message: "Dex client is created",
+			}
+			condOauth := metav1.Condition{
+				Type:    authv1alpha1.DexClientConditionTypeOAuth2ClientCreated,
+				Status:  metav1.ConditionTrue,
+				Reason:  "Created",
+				Message: "oauth2client is created",
+			}
+			if err := r.updateDexClientStatusConditions(dexv1Client, ctx, condApplied, condOauth); err != nil {
+				return ctrl.Result{}, err
+			}
 		}
-
-	case authv1alpha1.PhaseActive:
-		// If the client is active but in the reconcile loop it's being updated.
+	} else {
 		log.Info("Client update", "client ID", dexv1Client.Name)
 		err := dexApiClient.UpdateClient(
 			ctx,
@@ -155,46 +219,65 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		)
 		if err != nil {
 			log.Error(err, "Client update failed", "client", dexv1Client.Name)
-			return r.updateStatus(ctx, dexv1Client, authv1alpha1.PhaseActiveDegraded, err)
+			cond := metav1.Condition{
+				Type:    authv1alpha1.DexClientConditionTypeApplied,
+				Status:  metav1.ConditionFalse,
+				Reason:  "DexClientUpdateFailed",
+				Message: fmt.Sprintf("failed updating client. error: %s", err.Error()),
+			}
+			if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, err
 		} else {
 			log.Info("Client updated", "client ID", dexv1Client.Name)
+			cond := metav1.Condition{
+				Type:    authv1alpha1.DexClientConditionTypeApplied,
+				Status:  metav1.ConditionTrue,
+				Reason:  "Updated",
+				Message: "Dex client is updated",
+			}
+			if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
+				return ctrl.Result{}, err
+			}
 		}
-
-	case authv1alpha1.PhaseFailed:
-		log.Info("Client failed")
-
-	default:
-		// Should never reach here
-		log.Info("Got an invalid state", "state", dexv1Client.Status.State)
-		return ctrl.Result{}, nil
-	}
-
-	err = r.Status().Update(ctx, dexv1Client)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	// Update the object and return
-	err = r.Update(ctx, dexv1Client)
-	if err != nil {
-		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
 }
 
-func (r *DexClientReconciler) updateStatus(ctx context.Context, dexClient *authv1alpha1.DexClient, status string, inErr error) (ctrl.Result, error) {
-	dexClient.Status.State = status
-	dexClient.Status.Message = inErr.Error()
-	err := r.Status().Update(ctx, dexClient)
-	if err != nil {
-		return ctrl.Result{}, err
+func isOAuth2ClientCreated(conditions []metav1.Condition) bool {
+	for _, condition := range conditions {
+		if condition.Type == authv1alpha1.DexClientConditionTypeOAuth2ClientCreated {
+			return condition.Status == metav1.ConditionTrue
+		}
 	}
-	return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, inErr
+	return false
+}
+
+func (r *DexClientReconciler) updateDexClientStatusConditions(dexClient *authv1alpha1.DexClient, ctx context.Context, newConditions ...metav1.Condition) error {
+	dexClient.Status.Conditions = mergeStatusConditions(dexClient.Status.Conditions, newConditions...)
+	return r.Client.Status().Update(ctx, dexClient)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *DexClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
+
+	dexClientPredicate := predicate.Predicate(predicate.Funcs{
+		GenericFunc: func(e event.GenericEvent) bool { return false },
+		DeleteFunc:  func(e event.DeleteEvent) bool { return false },
+		CreateFunc:  func(e event.CreateEvent) bool { return true },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			dexClientOld := e.ObjectOld.(*authv1alpha1.DexClient)
+			dexClientNew := e.ObjectNew.(*authv1alpha1.DexClient)
+			// only handle the Finalizer and Spec changes
+			return !equality.Semantic.DeepEqual(e.ObjectOld.GetFinalizers(), e.ObjectNew.GetFinalizers()) ||
+				!equality.Semantic.DeepEqual(dexClientOld.Spec, dexClientNew.Spec)
+
+		},
+	})
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&authv1alpha1.DexClient{}).
+		For(&authv1alpha1.DexClient{}, builder.WithPredicates(dexClientPredicate)).
 		Owns(&corev1.Secret{}).
 		Complete(r)
 }

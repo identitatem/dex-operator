@@ -62,7 +62,7 @@ func NewClientPEM(opts *Options) (*APIClient, error) {
 	}
 	creds := credentials.NewTLS(clientTLSConfig)
 
-	conn, err := grpc.Dial(opts.HostAndPort, grpc.WithTransportCredentials(creds), grpc.WithBlock())
+	conn, err := grpc.Dial(opts.HostAndPort, grpc.WithTransportCredentials(creds), grpc.WithBlock(), grpc.FailOnNonTempDialError(true))
 	if err != nil {
 		return nil, errors.Wrapf(err, "opening the gRPC connection with server %q", opts.HostAndPort)
 	}
@@ -82,9 +82,14 @@ func (c *APIClient) GetServerInfo(ctx context.Context) (string, error) {
 	return res.Server, nil
 }
 
+type CreateClientError struct {
+	ApiError      error
+	AlreadyExists bool
+}
+
 // CreateClient a new OIDC client in Dex
 func (c *APIClient) CreateClient(ctx context.Context, redirectUris []string, trustedPeers []string,
-	public bool, name string, id string, logoURL string, secret string) (*api.Client, error) {
+	public bool, name string, id string, logoURL string, secret string) (*api.Client, *CreateClientError) {
 	req := &api.CreateClientReq{
 		Client: &api.Client{
 			RedirectUris: redirectUris,
@@ -99,11 +104,11 @@ func (c *APIClient) CreateClient(ctx context.Context, redirectUris []string, tru
 
 	res, err := c.dex.CreateClient(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create the OIDC client")
+		return nil, &CreateClientError{errors.Wrap(err, "failed to create the OIDC client"), false}
 	}
 
 	if res.AlreadyExists {
-		return nil, errors.Errorf("client %q already exists", id)
+		return nil, &CreateClientError{errors.Errorf("client %q already exists", id), true}
 	}
 
 	return res.Client, nil

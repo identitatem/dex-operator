@@ -15,7 +15,6 @@ RUN go mod download
 COPY main.go main.go
 COPY api/ api/
 COPY controllers/ controllers/
-COPY pkg/ pkg/
 # Add config files
 COPY config/resources.go config/resources.go
 COPY config/rbac/ config/rbac/
