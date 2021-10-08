@@ -30,7 +30,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -45,7 +47,6 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	"github.com/identitatem/dex-operator/api/v1alpha1"
 	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
 	deploy "github.com/identitatem/dex-operator/deploy"
 )
@@ -110,49 +111,140 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Prepare Mutual TLS for gRPC connection
 	if err := r.configureMTLSSecret(dexServer, ctx); err != nil {
 		log.Error(err, "failed to configure mTLS Secret")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigMTLSSecretFailed",
+			Message: fmt.Sprintf("failed to configure MTLS secret. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
+
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncConfigMap(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync ConfigMap")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigMapFailed",
+			Message: fmt.Sprintf("failed to sync ConfigMap. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncService(dexServer, ctx); err != nil {
-		log.Error(err, "failed to sync http Service")
+		log.Error(err, "failed to sync http service")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigHTTPServiceFailed",
+			Message: fmt.Sprintf("failed to sync http service. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncServiceGrpc(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync grpc Service")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigGRPCServiceFailed",
+			Message: fmt.Sprintf("failed to sync grpc service. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
+
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncServiceAccount(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync ServiceAccount")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigServiceAccountFailed",
+			Message: fmt.Sprintf("failed to sync ServiceAccount. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncClusterRoleBinding(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync ClusterRoleBinding")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigClusterRoleBindingFailed",
+			Message: fmt.Sprintf("failed to sync ClusterRoleBinding. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncDeployment(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync Deployment")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigDeploymentFailed",
+			Message: fmt.Sprintf("failed to sync Deployment. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
 	if err := r.syncIngress(dexServer, ctx); err != nil {
 		log.Error(err, "failed to sync Ingress")
+		cond := metav1.Condition{
+			Type:   authv1alpha1.DexServerConditionTypeApplied,
+			Status: metav1.ConditionFalse,
+			Reason: "ConfigIngressFailed",
+			Message: fmt.Sprintf("failed to sync Ingress. error: %s",
+				err.Error()),
+		}
+		if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, err
 	}
 
 	// // TODO(cdoan): check CA or CERT renew?
+	cond := metav1.Condition{
+		Type:    authv1alpha1.DexServerConditionTypeApplied,
+		Status:  metav1.ConditionTrue,
+		Reason:  "Applied",
+		Message: "DexServer is applied",
+	}
+	if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 
-func getConnectorSecretFromRef(connector v1alpha1.ConnectorSpec, m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) (string, error) {
+func getConnectorSecretFromRef(connector authv1alpha1.ConnectorSpec, m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) (string, error) {
 	var secretNamespace, secretName string
 
 	switch connector.Type {
@@ -629,7 +721,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 				newConnector.Config.UserSearch.IDAttr = connector.LDAP.UserSearch.IDAttr
 				newConnector.Config.UserSearch.EmailAttr = connector.LDAP.UserSearch.EmailAttr
 				newConnector.Config.UserSearch.NameAttr = connector.LDAP.UserSearch.NameAttr
-				newConnector.Config.UserSearch = v1alpha1.UserSearchSpec{
+				newConnector.Config.UserSearch = authv1alpha1.UserSearchSpec{
 					BaseDN:    connector.LDAP.UserSearch.BaseDN,
 					Filter:    connector.LDAP.UserSearch.Filter,
 					Username:  connector.LDAP.UserSearch.Username,
@@ -641,7 +733,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 			}
 
 			if connector.LDAP.GroupSearch.BaseDN != "" {
-				newConnector.Config.GroupSearch = v1alpha1.GroupSearchSpec{
+				newConnector.Config.GroupSearch = authv1alpha1.GroupSearchSpec{
 					BaseDN:       connector.LDAP.GroupSearch.BaseDN,
 					Filter:       connector.LDAP.GroupSearch.Filter,
 					Scope:        connector.LDAP.GroupSearch.Scope,
@@ -774,6 +866,26 @@ func ignoreDeploymentRestartPredicate() predicate.Predicate {
 	}
 }
 
+// MergeStatusConditions returns a new status condition array with merged status conditions. It is based on newConditions,
+// and merges the corresponding existing conditions if exists.
+func mergeStatusConditions(conditions []metav1.Condition, newConditions ...metav1.Condition) []metav1.Condition {
+	merged := []metav1.Condition{}
+
+	merged = append(merged, conditions...)
+
+	for _, condition := range newConditions {
+		// merge two conditions if necessary
+		meta.SetStatusCondition(&merged, condition)
+	}
+
+	return merged
+}
+
+func updateDexServerStatusConditions(c client.Client, dexServer *authv1alpha1.DexServer, newConditions ...metav1.Condition) error {
+	dexServer.Status.Conditions = mergeStatusConditions(dexServer.Status.Conditions, newConditions...)
+	return c.Status().Update(context.TODO(), dexServer)
+}
+
 func (r *DexServerReconciler) installClusterRole() error {
 	values := struct {
 		ClusterRoleName string
@@ -811,8 +923,22 @@ func (r *DexServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		builder.WithPredicates(ignoreDeploymentRestartPredicate()), // ignore deployment rolling restarts
 	}
 
+	dexServerPredicate := predicate.Predicate(predicate.Funcs{
+		GenericFunc: func(e event.GenericEvent) bool { return false },
+		DeleteFunc:  func(e event.DeleteEvent) bool { return false },
+		CreateFunc:  func(e event.CreateEvent) bool { return true },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			dexServerOld := e.ObjectOld.(*authv1alpha1.DexServer)
+			dexServerNew := e.ObjectNew.(*authv1alpha1.DexServer)
+			// only handle the Finalizer and Spec changes
+			return !equality.Semantic.DeepEqual(e.ObjectOld.GetFinalizers(), e.ObjectNew.GetFinalizers()) ||
+				!equality.Semantic.DeepEqual(dexServerOld.Spec, dexServerNew.Spec)
+
+		},
+	})
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&authv1alpha1.DexServer{}).
+		For(&authv1alpha1.DexServer{}, builder.WithPredicates(dexServerPredicate)).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ServiceAccount{}).

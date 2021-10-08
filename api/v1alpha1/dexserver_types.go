@@ -186,6 +186,10 @@ type DexServerSpec struct {
 	IngressCertificateRef corev1.LocalObjectReference `json:"ingressCertificateRef,omitempty"`
 }
 
+const (
+	DexServerConditionTypeApplied string = "Applied"
+)
+
 // DexServerStatus defines the observed state of DexServer
 type DexServerStatus struct {
 	// +optional
@@ -194,6 +198,9 @@ type DexServerStatus struct {
 	Message string `json:"message,omitempty"`
 	// +optional
 	RelatedObjects []RelatedObjectReference `json:"relatedObjects,omitempty"`
+	// Conditions contains the different condition statuses for this DexServer.
+	// +optional
+	Conditions []metav1.Condition `json:"conditions"`
 }
 
 type RelatedObjectReference struct {
