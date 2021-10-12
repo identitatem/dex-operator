@@ -62,7 +62,7 @@ const (
 	GRPC_SERVICE_NAME           = "grpc"
 	DEX_IMAGE_ENV_NAME          = "RELATED_IMAGE_DEX"
 	MTLS_CERT_EXPIRY_ANNOTATION = "auth.identitatem.io/expiry"
-	IDP_CREDENTIAL_LABEL = "auth.identitatem.io/idp-credential"
+	IDP_CREDENTIAL_LABEL 		= "auth.identitatem.io/idp-credential"
 )
 
 // DexServerReconciler reconciles a DexServer object
