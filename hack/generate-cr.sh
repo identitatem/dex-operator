@@ -49,6 +49,8 @@ kind: Secret
 metadata:
   name: ${DEXSERVER_GH_CLIENT_SECRET_NAME}
   namespace: ${SECRET_NS}
+  labels:
+    auth.identitatem.io/idp-credential: ""
 type: Opaque
 stringData:
   clientSecret: ${DEXSERVER_GH_CLIENT_SECRET}
