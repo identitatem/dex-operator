@@ -46,7 +46,6 @@ spec:
                         - "{{ .DexServer.Name }}"
                 topologyKey: kubernetes.io/hostname
               weight: 35
-
       containers:
       - command:
         - /usr/local/bin/dex
@@ -82,7 +81,6 @@ spec:
         - key: dedicated
           operator: Exists
           effect: NoSchedule
-
       volumes:
       - configMap:
           items:
