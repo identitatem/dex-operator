@@ -249,8 +249,24 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{Requeue: true, RequeueAfter: 1 * time.Hour}, nil
 }
 
+// Check if the secret already contains the required label "auth.identitatem.io/idp-credential" 
+// and if it doesn't then add the label - this label allows us to watch specific secrets for updates
+func checkAndAddLabelToSecret(secret *corev1.Secret, r *DexServerReconciler, ctx context.Context) {
+	log := ctrllog.FromContext(ctx)
+
+	if secret.Labels == nil {
+		secret.Labels = make(map[string]string)
+	}
+	if _, ok := secret.Labels[IDP_CREDENTIAL_LABEL]; !ok {
+		secret.Labels[IDP_CREDENTIAL_LABEL] = ""
+		if err := r.Update(ctx, secret); err != nil {
+			log.Error(err, "Error updating secret with label")
+		}
+	}
+}
+
 func getConnectorSecretFromRef(connector authv1alpha1.ConnectorSpec, m *authv1alpha1.DexServer, r *DexServerReconciler, ctx context.Context) (string, error) {
-	var secretNamespace, secretName string
+	var secretNamespace, secretName string	
 
 	switch connector.Type {
 	case authv1alpha1.ConnectorTypeGitHub:
@@ -262,6 +278,7 @@ func getConnectorSecretFromRef(connector authv1alpha1.ConnectorSpec, m *authv1al
 		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && kubeerrors.IsNotFound(err) {
 			return "", err
 		}
+		checkAndAddLabelToSecret(resource, r, ctx)
 		return string(resource.Data["clientSecret"]), nil
 	case authv1alpha1.ConnectorTypeMicrosoft:
 		secretName = connector.Microsoft.ClientSecretRef.Name
@@ -272,6 +289,7 @@ func getConnectorSecretFromRef(connector authv1alpha1.ConnectorSpec, m *authv1al
 		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && kubeerrors.IsNotFound(err) {
 			return "", err
 		}
+		checkAndAddLabelToSecret(resource, r, ctx)
 		return string(resource.Data["clientSecret"]), nil
 	case authv1alpha1.ConnectorTypeLDAP:
 		secretName = connector.LDAP.BindPWRef.Name
@@ -282,6 +300,7 @@ func getConnectorSecretFromRef(connector authv1alpha1.ConnectorSpec, m *authv1al
 		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && kubeerrors.IsNotFound(err) {
 			return "", err
 		}
+		checkAndAddLabelToSecret(resource, r, ctx)
 		return string(resource.Data["bindPW"]), nil
 	default:
 		return "", fmt.Errorf("could not retrieve secret")
@@ -735,6 +754,8 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 					secretNamespace = dexServer.Namespace
 				}
 				resource := &corev1.Secret{}
+				// Add label to this secret so that the secret can be watched for updates
+				checkAndAddLabelToSecret(resource, r, ctx)				
 				if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && kubeerrors.IsNotFound(err) {
 					// Error getting secret
 					log.Error(err, "Error getting root CA")

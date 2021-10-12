@@ -38,8 +38,6 @@ export DEXSERVER_LDAP_AD_USERSEARCH_BASEDN=${DEXSERVER_LDAP_AD_USERSEARCH_BASEDN
 # Secret containing root ca (ca.crt), and client cert and key (tls.crt, tls.key) to test LDAP on Azure AD with self-signed certificates
 oc create secret generic ${DEXSERVER_LDAP_AD_ROOTCA_SECRET_NAME} \
 --from-file=ca.crt=ldap-certs/ca.crt \
---from-file=tls.crt=ldap-certs/tls.crt \
---from-file=tls.key=ldap-certs/tls.key \
 -n ${SECRET_NS} --dry-run -o yaml > demo-dexserver-${NAME}-${NS}.yaml
 
 cat >> demo-dexserver-${NAME}-${NS}.yaml <<EOF
@@ -49,8 +47,6 @@ kind: Secret
 metadata:
   name: ${DEXSERVER_GH_CLIENT_SECRET_NAME}
   namespace: ${SECRET_NS}
-  labels:
-    auth.identitatem.io/idp-credential: ""
 type: Opaque
 stringData:
   clientSecret: ${DEXSERVER_GH_CLIENT_SECRET}
