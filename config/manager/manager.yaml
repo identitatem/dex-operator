@@ -13,6 +13,27 @@ metadata:
   labels:
     control-plane: controller-manager
 spec:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: idp-antiaffinity-selector
+                  operator: In
+                  values:
+                    - dex-controller-manager
+            topologyKey: topology.kubernetes.io/zone
+          weight: 70
+        - podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: idp-antiaffinity-selector
+                  operator: In
+                  values:
+                    - dex-controller-manager
+            topologyKey: kubernetes.io/hostname
+          weight: 35
   selector:
     matchLabels:
       control-plane: controller-manager
@@ -21,40 +42,48 @@ spec:
     metadata:
       labels:
         control-plane: controller-manager
+    idp-antiaffinity-selector: dex-controller-manager
     spec:
       securityContext:
         runAsNonRoot: true
       containers:
-      - command:
-        - /manager
-        args:
-        - --leader-elect
-        image: controller:latest
-        imagePullPolicy: Always
-        env:
-        - name: RELATED_IMAGE_DEX
-          value: quay.io/dexidp/dex:v2.28.1
-        name: manager
-        securityContext:
-          allowPrivilegeEscalation: false
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8081
-          initialDelaySeconds: 15
-          periodSeconds: 20
-        readinessProbe:
-          httpGet:
-            path: /readyz
-            port: 8081
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        resources:
-          limits:
-            cpu: 500m
-            memory: 700Mi
-          requests:
-            cpu: 500m
-            memory: 700Mi
+        - command:
+            - /manager
+          args:
+            - --leader-elect
+          image: controller:latest
+          imagePullPolicy: Always
+          env:
+            - name: RELATED_IMAGE_DEX
+              value: quay.io/dexidp/dex:v2.28.1
+          name: manager
+          securityContext:
+            allowPrivilegeEscalation: false
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 500m
+              memory: 700Mi
+            requests:
+              cpu: 500m
+              memory: 700Mi
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
+      tolerations:
+        - key: node-role.kubernetes.io/infra
+          operator: Exists
+          effect: NoSchedule
+        - key: dedicated
+          operator: Exists
+          effect: NoSchedule

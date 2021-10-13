@@ -23,7 +23,29 @@ spec:
         app: "{{ .DexServer.Name }}"
         dexconfig_name: "{{ .DexServer.Name }}"
         dexconfig_namespace: "{{ .DexServer.Namespace }}"
+        idp-antiaffinity-selector: "{{ .DexServer.Name }}"
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: idp-antiaffinity-selector
+                      operator: In
+                      values:
+                        - "{{ .DexServer.Name }}"
+                topologyKey: topology.kubernetes.io/zone
+              weight: 70
+            - podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: idp-antiaffinity-selector
+                      operator: In
+                      values:
+                        - "{{ .DexServer.Name }}"
+                topologyKey: kubernetes.io/hostname
+              weight: 35
       containers:
       - command:
         - /usr/local/bin/dex
@@ -52,6 +74,13 @@ spec:
           name: mtls
 {{ .AdditionalVolumeMounts | indent 8 }}          
       serviceAccountName: "{{ .ServiceAccountName }}"
+      tolerations:
+        - key: node-role.kubernetes.io/infra
+          operator: Exists
+          effect: NoSchedule
+        - key: dedicated
+          operator: Exists
+          effect: NoSchedule
       volumes:
       - configMap:
           items:
