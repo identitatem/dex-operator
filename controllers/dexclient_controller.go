@@ -45,8 +45,8 @@ import (
 	dexapi "github.com/identitatem/dex-operator/controllers/dex"
 )
 
-const ( 
-	DEX_CLIENT_SECRET_LABEL 		  = "auth.identitatem.io/dex-client-secret"
+const (
+	DEX_CLIENT_SECRET_LABEL           = "auth.identitatem.io/dex-client-secret"
 	DEX_CLIENT_SECRET_HASH_ANNOTATION = "auth.identitatem.io/dex-client-secret-hash"
 )
 
@@ -144,7 +144,7 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// Create a new OAuth2Client
 		r.CreateOAuth2Client(dexApiClient, dexv1Client, ctx)
 	} else {
-		if (hasClientSecretBeenUpdated) {	// If the client secret has been updated, we will need to delete and recreate the OAuth2Client (since the dex API for UpdateClient does not accept the secret for updating)
+		if hasClientSecretBeenUpdated { // If the client secret has been updated, we will need to delete and recreate the OAuth2Client (since the dex API for UpdateClient does not accept the secret for updating)
 			// Delete OAuth2Client
 			r.DeleteOAuth2Client(dexApiClient, dexv1Client, ctx)
 
@@ -158,16 +158,16 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{}, nil
 }
 
-func (r *DexClientReconciler) CreateOAuth2Client (dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (ctrl.Result, error)  {
+func (r *DexClientReconciler) CreateOAuth2Client(dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
 
 	log.Info("Creating dex client", "name", dexv1Client.Name,
-	"redirectURIs", dexv1Client.Spec.RedirectURIs,
-	"TrustedPeers", dexv1Client.Spec.TrustedPeers,
-	"Public", dexv1Client.Spec.Public,
-	"ClientID", dexv1Client.Spec.ClientID,
-	"LogoURL", dexv1Client.Spec.LogoURL,
-	"clientSecretRef", dexv1Client.Spec.ClientSecretRef.Name)
+		"redirectURIs", dexv1Client.Spec.RedirectURIs,
+		"TrustedPeers", dexv1Client.Spec.TrustedPeers,
+		"Public", dexv1Client.Spec.Public,
+		"ClientID", dexv1Client.Spec.ClientID,
+		"LogoURL", dexv1Client.Spec.LogoURL,
+		"clientSecretRef", dexv1Client.Spec.ClientSecretRef.Name)
 
 	// read clientSecret from secret
 	dexclientclientSecret, err := r.getClientClientSecretFromRef(dexv1Client, ctx)
@@ -244,7 +244,7 @@ func (r *DexClientReconciler) CreateOAuth2Client (dexApiClient *dexapi.APIClient
 	return ctrl.Result{}, nil
 }
 
-func (r *DexClientReconciler) UpdateOAuth2Client (dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (ctrl.Result, error)  {
+func (r *DexClientReconciler) UpdateOAuth2Client(dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
 	// Update Client
 	log.Info("Client update", "client ID", dexv1Client.Name)
@@ -284,13 +284,13 @@ func (r *DexClientReconciler) UpdateOAuth2Client (dexApiClient *dexapi.APIClient
 	return ctrl.Result{}, nil
 }
 
-func (r *DexClientReconciler) DeleteOAuth2Client (dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (ctrl.Result, error)  {
+func (r *DexClientReconciler) DeleteOAuth2Client(dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
 	// Delete Client
 	log.Info("Client delete", "client ID", dexv1Client.Name)
 	err := dexApiClient.DeleteClient(
 		ctx,
-		dexv1Client.Spec.ClientID,				
+		dexv1Client.Spec.ClientID,
 	)
 	if err != nil {
 		log.Error(err, "Client deletion failed", "client", dexv1Client.Name)
@@ -298,7 +298,8 @@ func (r *DexClientReconciler) DeleteOAuth2Client (dexApiClient *dexapi.APIClient
 	}
 	return ctrl.Result{}, nil
 }
-// Check if the secret already contains the required label "auth.identitatem.io/dex-client-secret" 
+
+// Check if the secret already contains the required label "auth.identitatem.io/dex-client-secret"
 // and if it doesn't then add the label - this label allows us to watch specific secrets for updates
 func checkAndAddLabelToClientSecret(secret *corev1.Secret, r *DexClientReconciler, ctx context.Context) {
 	log := ctrllog.FromContext(ctx)
@@ -325,7 +326,7 @@ func (r *DexClientReconciler) getHashForASecret(dexv1Client *authv1alpha1.DexCli
 	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, dexclientclientSecret); err != nil {
 		if !kubeerrors.IsNotFound(err) {
 			return "", err
-		}		
+		}
 	} else {
 		// Get hash for client secret
 		jsonData, err := json.Marshal(dexclientclientSecret)
@@ -339,7 +340,7 @@ func (r *DexClientReconciler) getHashForASecret(dexv1Client *authv1alpha1.DexCli
 	return "", nil
 }
 
-// Check to see if the dex client secret has been updated: This is done by adding an annotation containing 
+// Check to see if the dex client secret has been updated: This is done by adding an annotation containing
 // the client secret's hash to the Dex Client resource and comparing the stored hash with the newly computed hash
 func (r *DexClientReconciler) hasClientSecretBeenUpdated(dexv1Client *authv1alpha1.DexClient, ctx context.Context) (bool, error) {
 	log := ctrllog.FromContext(ctx)
@@ -355,7 +356,7 @@ func (r *DexClientReconciler) hasClientSecretBeenUpdated(dexv1Client *authv1alph
 	if dexv1Client.Annotations == nil {
 		dexv1Client.Annotations = make(map[string]string)
 	}
-	
+
 	if hashValue, ok := dexv1Client.Annotations[DEX_CLIENT_SECRET_HASH_ANNOTATION]; !ok {
 		// In the dex client add an annotation for the client secret hash if there isn't one yet
 		dexv1Client.Annotations[DEX_CLIENT_SECRET_HASH_ANNOTATION] = dexClientSecretHash
@@ -363,16 +364,16 @@ func (r *DexClientReconciler) hasClientSecretBeenUpdated(dexv1Client *authv1alph
 			log.Error(err, "Error updating dex client with client secret hash")
 			return false, err
 		}
-	} else if (hashValue != dexClientSecretHash) { // The Dex client secret has been edited, we must delete and recreate the Oauth2Client
-        log.Info("The Dex client secret has been updated")
+	} else if hashValue != dexClientSecretHash { // The Dex client secret has been edited, we must delete and recreate the Oauth2Client
+		log.Info("The Dex client secret has been updated")
 		// In the dex client update the annotation with the newly computed client secret hash
 		dexv1Client.Annotations[DEX_CLIENT_SECRET_HASH_ANNOTATION] = dexClientSecretHash
 		if err := r.Update(ctx, dexv1Client); err != nil {
 			log.Error(err, "Error updating dex client with client secret hash")
 			return true, err
-		}		
+		}
 		return true, nil
-    }
+	}
 	return false, nil
 }
 
@@ -408,7 +409,7 @@ func (r *DexClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	})
 
 	// Watch for updates to the secrets containing the client secret for clusters to connect to the DexServer
-	// These secrets are labelled with auth.identitatem.io/dex-client-secret="" 
+	// These secrets are labelled with auth.identitatem.io/dex-client-secret=""
 	clientSecretPredicate := predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			if _, ok := e.ObjectNew.GetLabels()[DEX_CLIENT_SECRET_LABEL]; ok {
@@ -416,29 +417,29 @@ func (r *DexClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			}
 			return false
 		},
-	}	
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&authv1alpha1.DexClient{}, builder.WithPredicates(dexClientPredicate)).
 		Owns(&corev1.Secret{}).
-		Watches(&source.Kind{Type: &corev1.Secret{}}, 	// Since the client secrets for Dex Clients are not generated by this controller, updates to them will not trigger the reconcile loop. We need map them to a resource (dex client) that is managed by this controller.
-		handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
-			var dexClientList authv1alpha1.DexClientList
-			_ = mgr.GetClient().List(context.TODO(), &dexClientList)
+		Watches(&source.Kind{Type: &corev1.Secret{}}, // Since the client secrets for Dex Clients are not generated by this controller, updates to them will not trigger the reconcile loop. We need map them to a resource (dex client) that is managed by this controller.
+			handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
+				var dexClientList authv1alpha1.DexClientList
+				_ = mgr.GetClient().List(context.TODO(), &dexClientList)
 
-			var requests = []reconcile.Request{}
+				var requests = []reconcile.Request{}
 
-			for _, dexClient := range dexClientList.Items {
-				requests = append(requests, reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Name:      dexClient.Name,
-						Namespace: dexClient.Namespace,
-					},
-				})
-			}
-			return requests // Events from the watched secrets mapped to the DexClient resource
-		}),
-			builder.WithPredicates(clientSecretPredicate)). // Predicate to ensure we're only watching secrets that have the label "auth.identitatem.io/dex-client-secret" on them			
+				for _, dexClient := range dexClientList.Items {
+					requests = append(requests, reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      dexClient.Name,
+							Namespace: dexClient.Namespace,
+						},
+					})
+				}
+				return requests // Events from the watched secrets mapped to the DexClient resource
+			}),
+			builder.WithPredicates(clientSecretPredicate)). // Predicate to ensure we're only watching secrets that have the label "auth.identitatem.io/dex-client-secret" on them
 		Complete(r)
 }
 
