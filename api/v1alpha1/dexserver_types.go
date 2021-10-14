@@ -188,6 +188,7 @@ type DexServerSpec struct {
 
 const (
 	DexServerConditionTypeApplied string = "Applied"
+	DexServerConditionTypeRunning string = "Running"
 )
 
 // DexServerStatus defines the observed state of DexServer

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ghodss/yaml"
@@ -241,6 +242,16 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
 		return ctrl.Result{}, err
 	}
+
+	log.V(1).Info("Checking for dexServer pod status")
+	cond, err := r.getDexServerPodCondition(r.Client, dexServer)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	// Reconcile hourly to ensure grpc mtls certs are regenerated before expiry
 	return ctrl.Result{Requeue: true, RequeueAfter: 1 * time.Hour}, nil
 }
@@ -961,6 +972,52 @@ func (r *DexServerReconciler) installClusterRole() error {
 	}
 
 	return nil
+}
+
+// See if the DexServer pod is running and report back on the status condition
+func (r *DexServerReconciler) getDexServerPodCondition(c client.Client, dexServer *authv1alpha1.DexServer) (metav1.Condition, error) {
+	//default condition
+	cond := metav1.Condition{
+		Type:    authv1alpha1.DexServerConditionTypeRunning,
+		Status:  metav1.ConditionFalse,
+		Reason:  "NotRunning",
+		Message: "DexServer is not running",
+	}
+
+	podList := &corev1.PodList{}
+	if err := r.Client.List(context.TODO(), podList, client.InNamespace(dexServer.Namespace)); err != nil {
+		return cond, err
+	}
+
+	log := ctrl.Log.WithName("controllers").WithName("dexserver").WithName("getDexServerPodCondition").WithValues("namespace", dexServer.Namespace, "name", dexServer.Name)
+
+	if int(len(podList.Items)) > 0 {
+		for _, pod := range podList.Items {
+			log.V(5).Info("Checking dexServer pod", "pod name", pod.Name)
+
+			if pod.Status.ContainerStatuses != nil && len(pod.Status.ContainerStatuses) > 0 {
+				for _, cs := range pod.Status.ContainerStatuses {
+					log.V(7).Info("Checking container", "name", cs.Name, "image", cs.Image, "ready", cs.Ready)
+					if strings.Contains(cs.Image, "/dex:v") {
+						//once container is ready, report back as running
+						if cs.Ready {
+							log.V(5).Info("Pod running", "name", pod.Name)
+
+							cond = metav1.Condition{
+								Type:    authv1alpha1.DexServerConditionTypeRunning,
+								Status:  metav1.ConditionTrue,
+								Reason:  "Running",
+								Message: "DexServer is running",
+							}
+							return cond, nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return cond, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
