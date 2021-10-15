@@ -1,0 +1,33 @@
+# Copyright Red Hat
+
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    # Has to use not-quite-regex from https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#filter-pattern-cheat-sheet
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*'
+
+name: Create Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16
+
+    - name: Publish a release tagged image
+      env:
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
+      run: |
+        export IMAGE_TAG_BASE=quay.io/identitatem/dex-operator
+        export IMG_TAG=${GITHUB_REF##*/}
+        export IMG=${IMAGE_TAG_BASE}:${IMG_TAG}
+        export BUNDLE_IMG=${IMAGE_TAG_BASE}-bundle:${IMG_TAG}
+        export VERSION=${GITHUB_REF##*/}
+        make publish-release

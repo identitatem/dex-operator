@@ -66,6 +66,10 @@ endif
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+# Global things
+OS=$(shell uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(shell uname -m | sed 's/x86_64/amd64/g')
+
 all: build
 
 ##@ General
@@ -115,6 +119,15 @@ docker-build: test ## Build docker image with the manager.
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
 
+.PHONY: publish-release
+## Upodate, build, and push the bundle on a semver release tag, then build and push the catalog.
+publish-release: docker-login docker-build docker-push bundle bundle-build bundle-push catalog-build catalog-push
+
+.PHONY: docker-login
+## Log in to the docker registry for ${BUNDLE_IMG}
+docker-login:
+	@docker login ${BUNDLE_IMG} -u ${DOCKER_USER} -p ${DOCKER_PASS}
+
 ##@ Deployment
 
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
@@ -135,6 +148,8 @@ CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1)
 
+.PHONY: kustomize
+## Find or download kustomize
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
 	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v3@v3.8.7)
@@ -157,12 +172,19 @@ rm -rf $$TMP_DIR ;\
 }
 endef
 
+OPERATOR_SDK ?= ${PWD}/operator-sdk
+.PHONY: operatorsdk
+## Install operator-sdk to ${OPERATOR_SDK} (defaults to the current directory)
+operatorsdk:
+	@curl '-#' -fL -o ${OPERATOR_SDK} https://github.com/operator-framework/operator-sdk/releases/download/v1.13.0/operator-sdk_${OS}_${ARCH} && \
+		chmod +x ${OPERATOR_SDK}
+
 .PHONY: bundle
-bundle: manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
-	operator-sdk generate kustomize manifests -q
+bundle: manifests kustomize operatorsdk ## Generate bundle manifests and metadata, then validate generated files.
+	${OPERATOR_SDK} generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
-	operator-sdk bundle validate ./bundle
+	$(KUSTOMIZE) build config/manifests | ${OPERATOR_SDK} generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	${OPERATOR_SDK} bundle validate ./bundle
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
