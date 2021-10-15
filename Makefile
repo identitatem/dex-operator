@@ -166,8 +166,15 @@ rm -rf $$TMP_DIR ;\
 }
 endef
 
+OPERATOR_SDK ?= ${PWD}/operator-sdk
+.PHONY: operatorsdk
+## Install operator-sdk to ${OPERATOR_SDK} (defaults to the current directory)
+operatorsdk:
+	@curl '-#' -fL -o ${OPERATOR_SDK} https://github.com/operator-framework/operator-sdk/releases/download/v1.13.0/operator-sdk_${OS}_${ARCH} && \
+		chmod +x ${OPERATOR_SDK}
+
 .PHONY: bundle
-bundle: manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
+bundle: manifests kustomize operatorsdk ## Generate bundle manifests and metadata, then validate generated files.
 	operator-sdk generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
