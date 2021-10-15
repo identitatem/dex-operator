@@ -28,6 +28,6 @@ jobs:
         export IMAGE_TAG_BASE=quay.io/identitatem/dex-operator
         export IMG_TAG=${GITHUB_REF##*/}
         export IMG=${IMAGE_TAG_BASE}:${IMG_TAG}
-        export BUNDLE_IMG ?= ${IMAGE_TAG_BASE}-bundle:${IMG_TAG}
+        export BUNDLE_IMG=${IMAGE_TAG_BASE}-bundle:${IMG_TAG}
         export VERSION=${GITHUB_REF##*/}
         make publish-release
