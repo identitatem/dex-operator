@@ -115,6 +115,15 @@ docker-build: test ## Build docker image with the manager.
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
 
+.PHONY: publish-release
+## Upodate, build, and push the bundle on a semver release tag, then build and push the catalog.
+publish-release: docker-login docker-build docker-push bundle bundle-build bundle-push catalog-build catalog-push
+
+.PHONY: docker-login
+## Log in to the docker registry for ${BUNDLE_IMG}
+docker-login:
+	@docker login ${BUNDLE_IMG} -u ${DOCKER_USER} -p ${DOCKER_PASS}
+
 ##@ Deployment
 
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
