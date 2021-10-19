@@ -140,6 +140,11 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	hasClientSecretBeenUpdated, err := r.hasClientSecretBeenUpdated(dexv1Client, ctx)
 
+	if err != nil {
+		log.Error(err, "Failed to determine whether the dex client secret has been updated")
+		return ctrl.Result{}, err
+	}
+
 	if !isOAuth2ClientCreated(dexv1Client.Status.Conditions) {
 		// Create a new OAuth2Client
 		r.CreateOAuth2Client(dexApiClient, dexv1Client, ctx)
