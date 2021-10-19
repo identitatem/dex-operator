@@ -139,6 +139,9 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	defer dexApiClient.CloseConnection()
 
 	hasClientSecretBeenUpdated, err := r.hasClientSecretBeenUpdated(dexv1Client, ctx)
+	if err != nil {
+		return ctrl.Result{}, err
+	}	
 
 	if err != nil {
 		log.Error(err, "Failed to determine whether the dex client secret has been updated")
@@ -147,24 +150,41 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if !isOAuth2ClientCreated(dexv1Client.Status.Conditions) {
 		// Create a new OAuth2Client
-		r.CreateOAuth2Client(dexApiClient, dexv1Client, ctx)
+		requeue, err := r.CreateOAuth2Client(dexApiClient, dexv1Client, ctx)
+		if err != nil {
+			return ctrl.Result{}, err
+		} else if requeue {
+			return ctrl.Result{Requeue: true}, nil 
+		}
 	} else {
 		if hasClientSecretBeenUpdated { // If the client secret has been updated, we will need to delete and recreate the OAuth2Client (since the dex API for UpdateClient does not accept the secret for updating)
 			// Delete OAuth2Client
-			r.DeleteOAuth2Client(dexApiClient, dexv1Client, ctx)
+			err := r.DeleteOAuth2Client(dexApiClient, dexv1Client, ctx)
+			if err != nil {
+				return ctrl.Result{}, err
+			}			
 
-			// Recreate a OAuth2Client
-			r.CreateOAuth2Client(dexApiClient, dexv1Client, ctx)
+			// Recreate OAuth2Client
+			requeue, err := r.CreateOAuth2Client(dexApiClient, dexv1Client, ctx)
+			if err != nil {
+				return ctrl.Result{}, err
+			} else if requeue {
+				return ctrl.Result{Requeue: true}, nil 
+			}
 		} else {
 			// Update Oauth2Client
 			r.UpdateOAuth2Client(dexApiClient, dexv1Client, ctx)
+			if err != nil {
+				return ctrl.Result{}, err
+			}				
 		}
 	}
 	return ctrl.Result{}, nil
 }
 
-func (r *DexClientReconciler) CreateOAuth2Client(dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (ctrl.Result, error) {
+func (r *DexClientReconciler) CreateOAuth2Client(dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (bool, error) {
 	log := ctrllog.FromContext(ctx)
+	requeue := false
 
 	log.Info("Creating dex client", "name", dexv1Client.Name,
 		"redirectURIs", dexv1Client.Spec.RedirectURIs,
@@ -186,9 +206,9 @@ func (r *DexClientReconciler) CreateOAuth2Client(dexApiClient *dexapi.APIClient,
 			Message: fmt.Sprintf("failed getting client secret. error: %s", err.Error()),
 		}
 		if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
-			return ctrl.Result{}, err
+			return requeue, err
 		}
-		return ctrl.Result{}, err
+		return requeue, err
 	}
 
 	// Implement dex auth client creation here
@@ -212,9 +232,10 @@ func (r *DexClientReconciler) CreateOAuth2Client(dexApiClient *dexapi.APIClient,
 				Message: "oauth2client found",
 			}
 			if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
-				return ctrl.Result{}, err
+				return requeue, err
 			}
-			return ctrl.Result{Requeue: true}, nil
+			requeue = true
+			return requeue, nil
 		} else {
 			log.Error(createClientError.ApiError, "Client create failed", "client", dexv1Client.Name)
 			cond := metav1.Condition{
@@ -224,9 +245,9 @@ func (r *DexClientReconciler) CreateOAuth2Client(dexApiClient *dexapi.APIClient,
 				Message: fmt.Sprintf("failed creating client. error: %s", createClientError.ApiError.Error()),
 			}
 			if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
-				return ctrl.Result{}, err
+				return requeue, err
 			}
-			return ctrl.Result{}, createClientError.ApiError
+			return requeue, createClientError.ApiError
 		}
 	} else {
 		log.Info("Client created", "client ID", res.GetId())
@@ -243,13 +264,13 @@ func (r *DexClientReconciler) CreateOAuth2Client(dexApiClient *dexapi.APIClient,
 			Message: "oauth2client is created",
 		}
 		if err := r.updateDexClientStatusConditions(dexv1Client, ctx, condApplied, condOauth); err != nil {
-			return ctrl.Result{}, err
+			return requeue, err
 		}
 	}
-	return ctrl.Result{}, nil
+	return requeue, nil
 }
 
-func (r *DexClientReconciler) UpdateOAuth2Client(dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (ctrl.Result, error) {
+func (r *DexClientReconciler) UpdateOAuth2Client(dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (error) {
 	log := ctrllog.FromContext(ctx)
 	// Update Client
 	log.Info("Client update", "client ID", dexv1Client.Name)
@@ -271,9 +292,9 @@ func (r *DexClientReconciler) UpdateOAuth2Client(dexApiClient *dexapi.APIClient,
 			Message: fmt.Sprintf("failed updating client. error: %s", err.Error()),
 		}
 		if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
-			return ctrl.Result{}, err
+			return err
 		}
-		return ctrl.Result{}, err
+		return err
 	} else {
 		log.Info("Client updated", "client ID", dexv1Client.Name)
 		cond := metav1.Condition{
@@ -283,13 +304,13 @@ func (r *DexClientReconciler) UpdateOAuth2Client(dexApiClient *dexapi.APIClient,
 			Message: "Dex client is updated",
 		}
 		if err := r.updateDexClientStatusConditions(dexv1Client, ctx, cond); err != nil {
-			return ctrl.Result{}, err
+			return err
 		}
 	}
-	return ctrl.Result{}, nil
+	return nil
 }
 
-func (r *DexClientReconciler) DeleteOAuth2Client(dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (ctrl.Result, error) {
+func (r *DexClientReconciler) DeleteOAuth2Client(dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (error) {
 	log := ctrllog.FromContext(ctx)
 	// Delete Client
 	log.Info("Client delete", "client ID", dexv1Client.Name)
@@ -299,9 +320,9 @@ func (r *DexClientReconciler) DeleteOAuth2Client(dexApiClient *dexapi.APIClient,
 	)
 	if err != nil {
 		log.Error(err, "Client deletion failed", "client", dexv1Client.Name)
-		return ctrl.Result{}, err
+		return err
 	}
-	return ctrl.Result{}, nil
+	return nil
 }
 
 // Check if the secret already contains the required label "auth.identitatem.io/dex-client-secret"
