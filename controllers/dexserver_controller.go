@@ -486,12 +486,14 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 					return err
 				}
 			}
+			// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
+			secretName := connector.LDAP.RootCARef.Namespace + "-" + connector.LDAP.RootCARef.Name			
 
 			newVolume := corev1.Volume{
 				Name: "ldapcerts-" + connector.Id,
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
-						SecretName: connector.LDAP.RootCARef.Name,
+						SecretName: secretName,
 					},
 				},
 			}
@@ -604,15 +606,24 @@ func (r *DexServerReconciler) copySecretToDexServerNamespace (dexServer *authv1a
 	// Secret to copy into (in the dex server namespace)
 	secretInDexServerNS := &corev1.Secret{}
 
-	if err := r.Client.Get(context.TODO(), client.ObjectKey{Name: originalSecret.Name, Namespace: dexServer.Namespace},
-	secretInDexServerNS); err != nil {
-		if !kubeerrors.IsNotFound(err) {
-			log.Error(err, "Error retrieving secret in dexserver namespace", "name", secretRef.Name)
+	// To ensure uniqueness of names for secrets copied into the dex server namespace, prefix the secret name with the original namespace
+	secretName := originalSecret.Namespace + "-" + originalSecret.Name
+	
+	err := r.Client.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: dexServer.Namespace}, secretInDexServerNS)
+
+	switch {
+	case err == nil:
+		// Secret already exists in the dex server ns, update it
+		secretInDexServerNS.Data = originalSecret.Data
+		if err := r.Client.Update(context.TODO(), secretInDexServerNS); err != nil {
+			log.Error(err, "Error updating secret in dexserver namespace", "name", secretRef.Name)
 			return err
-		}
+		}	
+	case kubeerrors.IsNotFound(err):
+		// Create secret in the dex server ns
 		secretInDexServerNS = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      originalSecret.Name,
+				Name:      secretName,
 				Namespace: dexServer.Namespace,
 			},
 			Type: corev1.SecretTypeOpaque,
@@ -621,15 +632,12 @@ func (r *DexServerReconciler) copySecretToDexServerNamespace (dexServer *authv1a
 		if err := r.Client.Create(context.TODO(), secretInDexServerNS); err != nil {
 			log.Error(err, "Error creating secret in dexserver namespace", "name", secretRef.Name)
 			return err
-		}
-	} else {
-		// Secret already exists in the dex server ns, update it
-		secretInDexServerNS.Data = originalSecret.Data
-		if err := r.Client.Update(context.TODO(), secretInDexServerNS); err != nil {
-			log.Error(err, "Error updating secret in dexserver namespace", "name", secretRef.Name)
-			return err
-		}
-	}
+		}	
+	default:
+		log.Error(err, "Error retrieving secret in dexserver namespace", "name", secretRef.Name)
+		return err
+	}	
+
 	return nil
 }
 
@@ -810,7 +818,8 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 						return err
 					}
 				}			
-				secretName := connector.LDAP.RootCARef.Name
+				// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
+				secretName := connector.LDAP.RootCARef.Namespace + "-" + connector.LDAP.RootCARef.Name
 				secretNamespace := dexServer.Namespace
 				resource := &corev1.Secret{}
 
