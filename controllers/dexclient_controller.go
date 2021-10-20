@@ -192,8 +192,8 @@ func (r *DexClientReconciler) CreateOAuth2Client(dexApiClient *dexapi.APIClient,
 		dexv1Client.Spec.RedirectURIs,
 		dexv1Client.Spec.TrustedPeers,
 		dexv1Client.Spec.Public,
-		dexv1Client.Name,
-		dexv1Client.Spec.ClientID,
+		dexv1Client.Spec.ClientID, // dexv1Client.Name,
+		dexv1Client.Name,          // dexv1Client.Spec.ClientID,
 		dexv1Client.Spec.LogoURL,
 		dexclientclientSecret,
 	)
@@ -250,11 +250,11 @@ func (r *DexClientReconciler) UpdateOAuth2Client(dexApiClient *dexapi.APIClient,
 	log.Info("Client update", "client ID", dexv1Client.Name)
 	err := dexApiClient.UpdateClient(
 		ctx,
-		dexv1Client.Spec.ClientID,
+		dexv1Client.Name, // dexv1Client.Spec.ClientID,
 		dexv1Client.Spec.RedirectURIs,
 		dexv1Client.Spec.TrustedPeers,
 		dexv1Client.Spec.Public,
-		dexv1Client.Name,
+		dexv1Client.Spec.ClientID, // dexv1Client.Name,
 		dexv1Client.Spec.LogoURL,
 	)
 	if err != nil {
@@ -290,7 +290,7 @@ func (r *DexClientReconciler) DeleteOAuth2Client(dexApiClient *dexapi.APIClient,
 	log.Info("Client delete", "client ID", dexv1Client.Name)
 	err := dexApiClient.DeleteClient(
 		ctx,
-		dexv1Client.Spec.ClientID,
+		dexv1Client.Name, // dexv1Client.Spec.ClientID,
 	)
 	if err != nil {
 		log.Error(err, "Client deletion failed", "client", dexv1Client.Name)
