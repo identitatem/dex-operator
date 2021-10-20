@@ -478,14 +478,6 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	// Iterate over connectors defined in the DexServer to create the dex configuration for connectors
 	for _, connector := range dexServer.Spec.Connectors {
 		if connector.Type == authv1alpha1.ConnectorTypeLDAP && connector.LDAP.RootCARef.Name != "" {
-
-			// Check if secret is in the dex server namespace
-			if secretNamespace := connector.LDAP.RootCARef.Namespace; secretNamespace != dexServer.Namespace {
-				err := r.copySecretToDexServerNamespace(dexServer, connector.LDAP.RootCARef, ctx)
-				if err != nil {
-					return err
-				}
-			}
 			// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
 			secretName := connector.LDAP.RootCARef.Namespace + "-" + connector.LDAP.RootCARef.Name			
 
