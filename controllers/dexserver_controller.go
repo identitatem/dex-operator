@@ -478,6 +478,15 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	// Iterate over connectors defined in the DexServer to create the dex configuration for connectors
 	for _, connector := range dexServer.Spec.Connectors {
 		if connector.Type == authv1alpha1.ConnectorTypeLDAP && connector.LDAP.RootCARef.Name != "" {
+
+			// Check if secret is in the dex server namespace
+			if secretNamespace := connector.LDAP.RootCARef.Namespace; secretNamespace != dexServer.Namespace {
+				err := r.copySecretToDexServerNamespace(dexServer, connector.LDAP.RootCARef, ctx)
+				if err != nil {
+					return err
+				}
+			}
+
 			newVolume := corev1.Volume{
 				Name: "ldapcerts-" + connector.Id,
 				VolumeSource: corev1.VolumeSource{
@@ -574,6 +583,53 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 		return err
 	}
 
+	return nil
+}
+
+// Copy a secret from its original namespace into the Dex Server namespace
+func (r *DexServerReconciler) copySecretToDexServerNamespace (dexServer *authv1alpha1.DexServer, secretRef corev1.SecretReference, ctx context.Context) (error) {
+	log := ctrllog.FromContext(ctx)
+
+	// Secret to copy from
+	originalSecret := &corev1.Secret{}
+	if err := r.Client.Get(context.TODO(),
+		client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace},
+		originalSecret); err != nil {
+		log.Error(err, "Error retrieving secret", "name", secretRef.Name)
+		return err
+	}
+	// Add label to this secret so that the secret can be watched for updates
+	checkAndAddLabelToSecret(originalSecret, r, ctx)	
+
+	// Secret to copy into (in the dex server namespace)
+	secretInDexServerNS := &corev1.Secret{}
+
+	if err := r.Client.Get(context.TODO(), client.ObjectKey{Name: originalSecret.Name, Namespace: dexServer.Namespace},
+	secretInDexServerNS); err != nil {
+		if !kubeerrors.IsNotFound(err) {
+			log.Error(err, "Error retrieving secret in dexserver namespace", "name", secretRef.Name)
+			return err
+		}
+		secretInDexServerNS = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      originalSecret.Name,
+				Namespace: dexServer.Namespace,
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: originalSecret.Data,
+		}
+		if err := r.Client.Create(context.TODO(), secretInDexServerNS); err != nil {
+			log.Error(err, "Error creating secret in dexserver namespace", "name", secretRef.Name)
+			return err
+		}
+	} else {
+		// Secret already exists in the dex server ns, update it
+		secretInDexServerNS.Data = originalSecret.Data
+		if err := r.Client.Update(context.TODO(), secretInDexServerNS); err != nil {
+			log.Error(err, "Error updating secret in dexserver namespace", "name", secretRef.Name)
+			return err
+		}
+	}
 	return nil
 }
 
@@ -747,20 +803,23 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 			// If there is a secret reference to the trusted Root CA
 			var rootCAPath, clientCAPath, clientKeyPath string
 			if connector.LDAP.RootCARef.Name != "" {
-				// Check if the Root CA (ca.crt) and client cert and key files (tls.cert, tls.key) are present
+				// Check if secret is in the dex server namespace
+				if secretNamespace := connector.LDAP.RootCARef.Namespace; secretNamespace != dexServer.Namespace {
+					err := r.copySecretToDexServerNamespace(dexServer, connector.LDAP.RootCARef, ctx)
+					if err != nil {
+						return err
+					}
+				}			
 				secretName := connector.LDAP.RootCARef.Name
-				var secretNamespace string
-				if secretNamespace = connector.LDAP.RootCARef.Namespace; secretNamespace == "" {
-					secretNamespace = dexServer.Namespace
-				}
+				secretNamespace := dexServer.Namespace
 				resource := &corev1.Secret{}
-				// Add label to this secret so that the secret can be watched for updates
-				checkAndAddLabelToSecret(resource, r, ctx)
-				if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && kubeerrors.IsNotFound(err) {
+
+				if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil {
 					// Error getting secret
-					log.Error(err, "Error getting root CA")
-					return nil
+					log.Error(err, "Error getting root CA secret in dex server ns")
+					return err
 				}
+				
 				if string(resource.Data["ca.crt"]) != "" {
 					rootCAPath = "/etc/dex/ldapcerts/" + connector.Id + "/ca.crt"
 				}
