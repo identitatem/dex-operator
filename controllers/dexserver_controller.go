@@ -474,29 +474,50 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	var additionalVolumeMounts []corev1.VolumeMount
 	var additionalVolumes []corev1.Volume
 	var additionalVolumeMountsYaml, additionalVolumesYaml []byte
+	var rootCAHash string
+
 	// Update Volume Mounts based on rootCA secret refs for LDAP connectors (Trusted Root CA and optionally client cert and key files)
 	// Iterate over connectors defined in the DexServer to create the dex configuration for connectors
 	for _, connector := range dexServer.Spec.Connectors {
 		if connector.Type == authv1alpha1.ConnectorTypeLDAP && connector.LDAP.RootCARef.Name != "" {
 			// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
 			secretName := connector.LDAP.RootCARef.Namespace + "-" + connector.LDAP.RootCARef.Name			
+			rootCASecret := &corev1.Secret{}
+			
+			// Add the root CA secret's sha256 checksum to the Deployment to trigger rolling restarts when the secret changes
+			if err := r.Client.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: dexServer.Namespace}, rootCASecret); err != nil {
+				// If the secret is not yet found, the annotation will be omitted, and will be added once the secret is created
+				if !kubeerrors.IsNotFound(err) {
+					log.Error(err, "error getting secret containing LDAP root CA")
+					return err
+				}
+			} else {
+				jsonData, err := json.Marshal(rootCASecret)
+				if err != nil {
+					log.Error(err, "failed to marshal LDAP root CA JSON")
+					return err
+				}
+				h := sha256.New()
+				h.Write([]byte(jsonData))
+				rootCAHash = rootCAHash + fmt.Sprintf("%x", h.Sum(nil))	// If there are multiple LDAP connectors with root CA, the hashes will be concatenated
 
-			newVolume := corev1.Volume{
-				Name: "ldapcerts-" + connector.Id,
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: secretName,
+				newVolume := corev1.Volume{
+					Name: "ldapcerts-" + connector.Id,
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: secretName,
+						},
 					},
-				},
+				}
+	
+				newVolumeMount := corev1.VolumeMount{
+					Name:      "ldapcerts-" + connector.Id,
+					MountPath: "/etc/dex/ldapcerts/" + connector.Id,
+				}
+	
+				additionalVolumeMounts = append(additionalVolumeMounts, newVolumeMount)
+				additionalVolumes = append(additionalVolumes, newVolume)				
 			}
-
-			newVolumeMount := corev1.VolumeMount{
-				Name:      "ldapcerts-" + connector.Id,
-				MountPath: "/etc/dex/ldapcerts/" + connector.Id,
-			}
-
-			additionalVolumeMounts = append(additionalVolumeMounts, newVolumeMount)
-			additionalVolumes = append(additionalVolumes, newVolume)
 		}
 	}
 	if len(additionalVolumeMounts) > 0 {
@@ -544,6 +565,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	values := struct {
 		DexImage               string
 		DexConfigMapHash       string
+		RootCAHash			   string	
 		ServiceAccountName     string
 		TlsSecretName          string
 		MtlsSecretName         string
@@ -554,6 +576,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	}{
 		DexImage:           dexImage,
 		DexConfigMapHash:   dexConfigMapHash,
+		RootCAHash: 		rootCAHash,
 		ServiceAccountName: SERVICE_ACCOUNT_NAME,
 		// this secret is generated using service serving certificate via service annotation
 		// service.beta.openshift.io/serving-cert-secret-name: dexServer.Name-tls-secret

@@ -13,6 +13,9 @@ spec:
   template:
     metadata:
       annotations:
+      {{ if .RootCAHash}}
+        auth.identitatem.io/rootCAHash: "{{ .RootCAHash }}"
+      {{ end }}      
       {{ if .DexConfigMapHash}}
         auth.identitatem.io/configHash: "{{ .DexConfigMapHash }}"
       {{ end }}
