@@ -485,7 +485,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 				}
 				h := sha256.New()
 				h.Write([]byte(jsonData))
-				rootCAHash = rootCAHash + fmt.Sprintf("%x", h.Sum(nil))	// If there are multiple LDAP connectors with root CA, the hashes will be concatenated
+				rootCAHash = rootCAHash + fmt.Sprintf("%x", h.Sum(nil)) // If there are multiple LDAP connectors with root CA, the hashes will be concatenated
 
 				newVolume := corev1.Volume{
 					Name: "ldapcerts-" + connector.Id,
@@ -551,7 +551,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	values := struct {
 		DexImage               string
 		DexConfigMapHash       string
-		RootCAHash			   string
+		RootCAHash             string
 		ServiceAccountName     string
 		TlsSecretName          string
 		MtlsSecretName         string
@@ -562,7 +562,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	}{
 		DexImage:           dexImage,
 		DexConfigMapHash:   dexConfigMapHash,
-		RootCAHash: 		rootCAHash,
+		RootCAHash:         rootCAHash,
 		ServiceAccountName: SERVICE_ACCOUNT_NAME,
 		// this secret is generated using service serving certificate via service annotation
 		// service.beta.openshift.io/serving-cert-secret-name: dexServer.Name-tls-secret
@@ -590,7 +590,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 }
 
 // Copy a secret from its original namespace into the Dex Server namespace
-func (r *DexServerReconciler) copySecretToDexServerNamespace (dexServer *authv1alpha1.DexServer, secretRef corev1.SecretReference, ctx context.Context) (error) {
+func (r *DexServerReconciler) copySecretToDexServerNamespace(dexServer *authv1alpha1.DexServer, secretRef corev1.SecretReference, ctx context.Context) error {
 	log := ctrllog.FromContext(ctx)
 
 	// Secret to copy from
