@@ -1,6 +1,7 @@
 #file extensions to ignore on top of .gitignore
 .copyrightignore
 _generated.go
+zz_generated.deepcopy.go
 config/
 kind_kubeconfig.yaml
 kind_kubeconfig_internal.yaml
