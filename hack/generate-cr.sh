@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright Red Hat
 
 export NAME=${NAME:-"dex2"}
 export NS=${NS:-"dex-operator"}

@@ -1,3 +1,5 @@
+# Copyright Red Hat
+
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
@@ -102,12 +104,15 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
-test: manifests generate fmt vet envtest ## Run tests.
+check-copyright:
+		@build/check-copyright.sh
+
+test: manifests generate fmt vet check-copyright envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
 
 ##@ Build
 
-build: generate fmt vet ## Build manager binary.
+build: generate fmt vet check-copyright ## Build manager binary.
 	go build -o bin/manager main.go
 
 run: manifests generate fmt vet ## Run a controller from your host.

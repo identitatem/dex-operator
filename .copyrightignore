@@ -1,0 +1,8 @@
+#file extensions to ignore on top of .gitignore
+.copyrightignore
+_generated.go
+config/
+kind_kubeconfig.yaml
+kind_kubeconfig_internal.yaml
+# directories to ignore
+bundle

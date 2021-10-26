@@ -1,4 +1,4 @@
-[comment]: # ( Copyright Contributors to the Open Cluster Management project )**Table of Contents**
+[comment]: # ( Copyright Red Hat )
 
 ## Mission Statement
 
