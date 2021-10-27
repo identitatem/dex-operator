@@ -111,16 +111,21 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		controllerutil.RemoveFinalizer(dexServer, DEXSERVER_FINALIZER)
 		if err := r.Client.Update(context.TODO(), dexServer); err != nil {
-			log.Error(err, "failed to update DexServer to remove the finalizer")
+			log.Error(err, "failed to update DexServer after removing the finalizer")
 			return ctrl.Result{}, err
 		}
 		return reconcile.Result{}, nil
 	}
 
 	// Add a finalizer to the DexServer to handle deletion of the ClusterRoleBinding, it will be removed once the ClusterRoleBinding is deleted
-	controllerutil.AddFinalizer(dexServer, DEXSERVER_FINALIZER)
-	finalizersForDexServer := dexServer.GetFinalizers()
-	log.Info("***Reconcile", "DexServer finalizers: ", finalizersForDexServer)
+	if !controllerutil.ContainsFinalizer(dexServer, DEXSERVER_FINALIZER) {
+		controllerutil.AddFinalizer(dexServer, DEXSERVER_FINALIZER)
+		// Update DexServer after adding finalizer
+		if err := r.Client.Update(context.TODO(), dexServer); err != nil {
+			log.Error(err, "failed to update DexServer after adding the finalizer")
+			return ctrl.Result{}, err
+		}
+	}
 
 	// Prepare Mutual TLS for gRPC connection
 	if err := r.manageMTLSSecret(dexServer, ctx); err != nil {
@@ -1120,8 +1125,9 @@ func (r *DexServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			dexServerOld := e.ObjectOld.(*authv1alpha1.DexServer)
 			dexServerNew := e.ObjectNew.(*authv1alpha1.DexServer)
-			// only handle the Finalizer and Spec changes
+			// only handle the Finalizer, DeletionStamp and Spec changes
 			return !equality.Semantic.DeepEqual(e.ObjectOld.GetFinalizers(), e.ObjectNew.GetFinalizers()) ||
+				!equality.Semantic.DeepEqual(e.ObjectOld.GetDeletionTimestamp(), e.ObjectNew.GetDeletionTimestamp()) ||
 				!equality.Semantic.DeepEqual(dexServerOld.Spec, dexServerNew.Spec)
 
 		},
