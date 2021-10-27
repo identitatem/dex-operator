@@ -16,6 +16,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/equality"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -49,6 +51,7 @@ const (
 	DEX_IMAGE_ENV_NAME          = "RELATED_IMAGE_DEX"
 	MTLS_CERT_EXPIRY_ANNOTATION = "auth.identitatem.io/expiry"
 	IDP_CREDENTIAL_LABEL        = "auth.identitatem.io/idp-credential"
+	DEXSERVER_FINALIZER         = "auth.identitatem.io/cleanup"
 )
 
 // DexServerReconciler reconciles a DexServer object
@@ -97,7 +100,31 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		req.NamespacedName,
 		dexServer,
 	); err != nil {
+		log.Error(err, "failed to fetch DexServer instance")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// If a deletionTimestamp exists this means the dex server is being deleted, we need to also delete the associated ClusterRoleBinding
+	if dexServer.DeletionTimestamp != nil {
+		if err := r.processDexServerDeletion(dexServer, ctx); err != nil {
+			return reconcile.Result{}, err
+		}
+		controllerutil.RemoveFinalizer(dexServer, DEXSERVER_FINALIZER)
+		if err := r.Client.Update(context.TODO(), dexServer); err != nil {
+			log.Error(err, "failed to update DexServer after removing the finalizer")
+			return ctrl.Result{}, err
+		}
+		return reconcile.Result{}, nil
+	}
+
+	// Add a finalizer to the DexServer to handle deletion of the ClusterRoleBinding, it will be removed once the ClusterRoleBinding is deleted
+	if !controllerutil.ContainsFinalizer(dexServer, DEXSERVER_FINALIZER) {
+		controllerutil.AddFinalizer(dexServer, DEXSERVER_FINALIZER)
+		// Update DexServer after adding finalizer
+		if err := r.Client.Update(context.TODO(), dexServer); err != nil {
+			log.Error(err, "failed to update DexServer after adding the finalizer")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Prepare Mutual TLS for gRPC connection
@@ -233,6 +260,28 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 	// Reconcile hourly to ensure grpc mtls certs are regenerated before expiry
 	return ctrl.Result{Requeue: true, RequeueAfter: 1 * time.Hour}, nil
+}
+
+// Handle cleanup during DexServer deletion
+func (r *DexServerReconciler) processDexServerDeletion(dexServer *authv1alpha1.DexServer, ctx context.Context) error {
+	log := ctrllog.FromContext(ctx)
+	clusterRoleBindingName := SERVICE_ACCOUNT_NAME + "-" + dexServer.Namespace
+	log.Info("processDexServerDeletion", "Clean up ClusterRoleBinding", clusterRoleBindingName)
+
+	// Delete ClusterRoleBinding
+	crb := &rbacv1.ClusterRoleBinding{}
+	err := r.Client.Get(context.TODO(), client.ObjectKey{Name: clusterRoleBindingName}, crb)
+	switch {
+	case err == nil:
+		if err := r.Client.Delete(context.TODO(), crb); err != nil {
+			log.Error(err, "failed to delete ClusterRoleBinding")
+			return err
+		}
+	case !kubeerrors.IsNotFound(err):
+		log.Error(err, "failed to fetch ClusterRoleBinding")
+		return err
+	}
+	return nil
 }
 
 // Check if the secret already contains the required label "auth.identitatem.io/idp-credential"
@@ -1076,8 +1125,9 @@ func (r *DexServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			dexServerOld := e.ObjectOld.(*authv1alpha1.DexServer)
 			dexServerNew := e.ObjectNew.(*authv1alpha1.DexServer)
-			// only handle the Finalizer and Spec changes
+			// only handle the Finalizer, DeletionStamp and Spec changes
 			return !equality.Semantic.DeepEqual(e.ObjectOld.GetFinalizers(), e.ObjectNew.GetFinalizers()) ||
+				!equality.Semantic.DeepEqual(e.ObjectOld.GetDeletionTimestamp(), e.ObjectNew.GetDeletionTimestamp()) ||
 				!equality.Semantic.DeepEqual(dexServerOld.Spec, dexServerNew.Spec)
 
 		},
