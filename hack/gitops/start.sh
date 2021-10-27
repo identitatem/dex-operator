@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright Red Hat
 
 if [ ! -d ssl ]; then
 mkdir -p ssl

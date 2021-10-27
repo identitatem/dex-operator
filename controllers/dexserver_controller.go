@@ -1,18 +1,4 @@
-/*
-Copyright 2021.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// Copyright Red Hat
 
 package controllers
 
@@ -481,9 +467,9 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	for _, connector := range dexServer.Spec.Connectors {
 		if connector.Type == authv1alpha1.ConnectorTypeLDAP && connector.LDAP.RootCARef.Name != "" {
 			// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
-			secretName := connector.LDAP.RootCARef.Namespace + "-" + connector.LDAP.RootCARef.Name			
+			secretName := connector.LDAP.RootCARef.Namespace + "-" + connector.LDAP.RootCARef.Name
 			rootCASecret := &corev1.Secret{}
-			
+
 			// Add the root CA secret's sha256 checksum to the Deployment to trigger rolling restarts when the secret changes
 			if err := r.Client.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: dexServer.Namespace}, rootCASecret); err != nil {
 				// If the secret is not yet found, the annotation will be omitted, and will be added once the secret is created
@@ -499,7 +485,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 				}
 				h := sha256.New()
 				h.Write([]byte(jsonData))
-				rootCAHash = rootCAHash + fmt.Sprintf("%x", h.Sum(nil))	// If there are multiple LDAP connectors with root CA, the hashes will be concatenated
+				rootCAHash = rootCAHash + fmt.Sprintf("%x", h.Sum(nil)) // If there are multiple LDAP connectors with root CA, the hashes will be concatenated
 
 				newVolume := corev1.Volume{
 					Name: "ldapcerts-" + connector.Id,
@@ -509,14 +495,14 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 						},
 					},
 				}
-	
+
 				newVolumeMount := corev1.VolumeMount{
 					Name:      "ldapcerts-" + connector.Id,
 					MountPath: "/etc/dex/ldapcerts/" + connector.Id,
 				}
-	
+
 				additionalVolumeMounts = append(additionalVolumeMounts, newVolumeMount)
-				additionalVolumes = append(additionalVolumes, newVolume)				
+				additionalVolumes = append(additionalVolumes, newVolume)
 			}
 		}
 	}
@@ -565,7 +551,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	values := struct {
 		DexImage               string
 		DexConfigMapHash       string
-		RootCAHash			   string	
+		RootCAHash             string
 		ServiceAccountName     string
 		TlsSecretName          string
 		MtlsSecretName         string
@@ -576,7 +562,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	}{
 		DexImage:           dexImage,
 		DexConfigMapHash:   dexConfigMapHash,
-		RootCAHash: 		rootCAHash,
+		RootCAHash:         rootCAHash,
 		ServiceAccountName: SERVICE_ACCOUNT_NAME,
 		// this secret is generated using service serving certificate via service annotation
 		// service.beta.openshift.io/serving-cert-secret-name: dexServer.Name-tls-secret
@@ -604,7 +590,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 }
 
 // Copy a secret from its original namespace into the Dex Server namespace
-func (r *DexServerReconciler) copySecretToDexServerNamespace (dexServer *authv1alpha1.DexServer, secretRef corev1.SecretReference, ctx context.Context) (error) {
+func (r *DexServerReconciler) copySecretToDexServerNamespace(dexServer *authv1alpha1.DexServer, secretRef corev1.SecretReference, ctx context.Context) error {
 	log := ctrllog.FromContext(ctx)
 
 	// Secret to copy from
@@ -616,14 +602,14 @@ func (r *DexServerReconciler) copySecretToDexServerNamespace (dexServer *authv1a
 		return err
 	}
 	// Add label to this secret so that the secret can be watched for updates
-	checkAndAddLabelToSecret(originalSecret, r, ctx)	
+	checkAndAddLabelToSecret(originalSecret, r, ctx)
 
 	// Secret to copy into (in the dex server namespace)
 	secretInDexServerNS := &corev1.Secret{}
 
 	// To ensure uniqueness of names for secrets copied into the dex server namespace, prefix the secret name with the original namespace
 	secretName := originalSecret.Namespace + "-" + originalSecret.Name
-	
+
 	err := r.Client.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: dexServer.Namespace}, secretInDexServerNS)
 
 	switch {
@@ -633,7 +619,7 @@ func (r *DexServerReconciler) copySecretToDexServerNamespace (dexServer *authv1a
 		if err := r.Client.Update(context.TODO(), secretInDexServerNS); err != nil {
 			log.Error(err, "Error updating secret in dexserver namespace", "name", secretRef.Name)
 			return err
-		}	
+		}
 	case kubeerrors.IsNotFound(err):
 		// Create secret in the dex server ns
 		secretInDexServerNS = &corev1.Secret{
@@ -647,11 +633,11 @@ func (r *DexServerReconciler) copySecretToDexServerNamespace (dexServer *authv1a
 		if err := r.Client.Create(context.TODO(), secretInDexServerNS); err != nil {
 			log.Error(err, "Error creating secret in dexserver namespace", "name", secretRef.Name)
 			return err
-		}	
+		}
 	default:
 		log.Error(err, "Error retrieving secret in dexserver namespace", "name", secretRef.Name)
 		return err
-	}	
+	}
 
 	return nil
 }
@@ -832,7 +818,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 					if err != nil {
 						return err
 					}
-				}			
+				}
 				// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
 				secretName := connector.LDAP.RootCARef.Namespace + "-" + connector.LDAP.RootCARef.Name
 				secretNamespace := dexServer.Namespace
@@ -843,7 +829,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 					log.Error(err, "Error getting root CA secret in dex server ns")
 					return err
 				}
-				
+
 				if string(resource.Data["ca.crt"]) != "" {
 					rootCAPath = "/etc/dex/ldapcerts/" + connector.Id + "/ca.crt"
 				}

@@ -1,3 +1,5 @@
+// Copyright Red Hat
+
 package v1alpha1
 
 const (

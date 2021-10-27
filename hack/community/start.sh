@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright Red Hat
 
 export GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-foo}
 export GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-foobar}

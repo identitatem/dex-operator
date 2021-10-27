@@ -1,3 +1,5 @@
+# Copyright Red Hat
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,12 +17,12 @@ spec:
       annotations:
       {{ if .RootCAHash}}
         auth.identitatem.io/rootCAHash: "{{ .RootCAHash }}"
-      {{ end }}      
+      {{ end }}
       {{ if .DexConfigMapHash}}
         auth.identitatem.io/configHash: "{{ .DexConfigMapHash }}"
       {{ end }}
       {{ if .MtlsSecretExpiry}}
-        auth.identitatem.io/grpcMtlsExpiry: "{{ .MtlsSecretExpiry }}" 
+        auth.identitatem.io/grpcMtlsExpiry: "{{ .MtlsSecretExpiry }}"
       {{ end }}
       labels:
         app: "{{ .DexServer.Name }}"
@@ -75,7 +77,7 @@ spec:
           name: tls
         - mountPath: /etc/dex/mtls
           name: mtls
-{{ .AdditionalVolumeMounts | indent 8 }}          
+{{ .AdditionalVolumeMounts | indent 8 }}
       serviceAccountName: "{{ .ServiceAccountName }}"
       tolerations:
         - key: node-role.kubernetes.io/infra
@@ -97,4 +99,4 @@ spec:
       - name: mtls
         secret:
           secretName: "{{ .MtlsSecretName }}"
-{{ .AdditionalVolumes | indent 6 }}          
+{{ .AdditionalVolumes | indent 6 }}

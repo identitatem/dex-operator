@@ -1,3 +1,4 @@
+[comment]: # ( Copyright Red Hat )
 # dex-operator
 
 This is a operator-sdk based operator to deploy and manage a Dex server instance.
