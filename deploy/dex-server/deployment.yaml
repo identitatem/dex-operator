@@ -77,6 +77,16 @@ spec:
           name: tls
         - mountPath: /etc/dex/mtls
           name: mtls
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 5556
+            scheme: HTTPS
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 5556
+            scheme: HTTPS                    
 {{ .AdditionalVolumeMounts | indent 8 }}
       serviceAccountName: "{{ .ServiceAccountName }}"
       tolerations:
