@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ghodss/yaml"
+	deployUtil "github.com/openshift/cluster-resource-override-admission-operator/pkg/deploy"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -258,8 +259,51 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
 		return ctrl.Result{}, err
 	}
+
+	log.Info("Checking for dexServer deployment status")
+	cond, err := r.getDexServerDeploymentCondition(dexServer)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
+		return ctrl.Result{}, err
+	}	
+
 	// Reconcile hourly to ensure grpc mtls certs are regenerated before expiry
 	return ctrl.Result{Requeue: true, RequeueAfter: 1 * time.Hour}, nil
+}
+
+// Get status (availability) of DexServer deployment
+func (r *DexServerReconciler) getDexServerDeploymentCondition(dexServer *authv1alpha1.DexServer) (metav1.Condition, error) {
+	// Failure condition
+	condition := metav1.Condition{
+		Type:    authv1alpha1.DexServerDeploymentAvailable,
+		Status:  metav1.ConditionFalse,
+		Reason:  "NotAvailable",
+		Message: "DexServer deployment is currently unavailable",
+	}
+	dexServerDeployment := &appsv1.Deployment{}
+	err := r.Client.Get(context.TODO(), client.ObjectKey{Name: dexServer.Name, Namespace: dexServer.Namespace}, dexServerDeployment)
+	if err != nil {
+		return condition, err
+	} else {
+		// Deployment exists, check its status
+		isAvailable, err := deployUtil.GetDeploymentStatus(dexServerDeployment)
+
+		if isAvailable {
+			condition = metav1.Condition{
+				Type:    authv1alpha1.DexServerDeploymentAvailable,
+				Status:  metav1.ConditionTrue,
+				Reason:  "Available",
+				Message: "DexServer deployment is available",
+			}
+		} else if err != nil {
+			condition.Message += ", " + err.Error()
+			return condition, nil
+		}
+	
+		return condition, nil
+	}
 }
 
 // Handle cleanup during DexServer deletion
@@ -814,7 +858,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 
 			if err != nil {
 				log.Error(err, "Error getting client secret")
-				return nil
+				return err
 			}
 
 			newConnector = DexConnectorSpec{
@@ -835,7 +879,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 
 			if err != nil {
 				log.Error(err, "Error getting client secret")
-				return nil
+				return err
 			}
 
 			newConnector = DexConnectorSpec{
@@ -855,7 +899,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 
 			if err != nil {
 				log.Error(err, "Error getting bind pw")
-				return nil
+				return err
 			}
 
 			// If there is a secret reference to the trusted Root CA

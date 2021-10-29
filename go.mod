@@ -8,6 +8,7 @@ require (
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.14.0
 	github.com/openshift/api v0.0.0-20210915110300-3cd8091317c4 //Openshift 4.6
+	github.com/openshift/cluster-resource-override-admission-operator v0.0.0-20211001082913-47f97077a47a // indirect
 	github.com/pkg/errors v0.9.1
 	google.golang.org/grpc v1.40.0
 	google.golang.org/protobuf v1.27.1 // indirect
