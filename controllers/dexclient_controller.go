@@ -20,6 +20,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -34,6 +35,7 @@ import (
 const (
 	DEX_CLIENT_SECRET_LABEL           = "auth.identitatem.io/dex-client-secret"
 	DEX_CLIENT_SECRET_HASH_ANNOTATION = "auth.identitatem.io/dex-client-secret-hash"
+	DEXCLIENT_FINALIZER               = "auth.identitatem.io/cleanup"
 )
 
 // DexClientReconciler reconciles a DexClient object
@@ -64,16 +66,45 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	dexv1Client := &authv1alpha1.DexClient{}
 	if err := r.Get(ctx, req.NamespacedName, dexv1Client); err != nil {
+		log.Error(err, "failed to fetch DexClient instance")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	log.Info("found dexclient", "DexClient.name", dexv1Client.Name, "DexClient.namespace", dexv1Client.Namespace)
 
-	// If dex server and dex client are created at the same time, we may need to wait a few seconds for dex server reconciler
-	// to create the mtls certs
+	// If a deletionTimestamp exists this means the dex client is being deleted. If no oauth2client,
+	// just remove the finalizer, else set up mtls connection and delete (later).
+	if dexv1Client.DeletionTimestamp != nil {
+		condOauth2Created := metav1.Condition{
+			Type:   authv1alpha1.DexClientConditionTypeOAuth2ClientCreated,
+			Status: metav1.ConditionTrue,
+		}
+		if !DexClientHasCondition(dexv1Client, condOauth2Created) {
+			log.Info("DexClient deleted with no oauth2client. Removing finalizer.")
+			controllerutil.RemoveFinalizer(dexv1Client, DEXCLIENT_FINALIZER)
+			if err := r.Client.Update(context.TODO(), dexv1Client); err != nil {
+				log.Error(err, "failed to update DexClient after removing the finalizer")
+				return ctrl.Result{}, err
+			}
+			return reconcile.Result{}, nil
+		}
+	}
+
+	// Add a finalizer to the DexClient to handle deletion of the oauth2client. It will be removed once the oauth2client is deleted
+	if !controllerutil.ContainsFinalizer(dexv1Client, DEXCLIENT_FINALIZER) {
+		controllerutil.AddFinalizer(dexv1Client, DEXCLIENT_FINALIZER)
+		// Update DexClient after adding finalizer
+		if err := r.Client.Update(context.TODO(), dexv1Client); err != nil {
+			log.Error(err, "failed to update DexClient after adding the finalizer")
+			return ctrl.Result{}, err
+		}
+	}
+
 	mTLSSecret, err := r.getMTLSSecret(dexv1Client, ctx)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			// If dex server and dex client are created at the same time, we may need to wait a few seconds for dex server reconciler
+			// to create the mtls certs
 			cond := metav1.Condition{
 				Type:    authv1alpha1.DexClientConditionTypeApplied,
 				Status:  metav1.ConditionFalse,
@@ -100,7 +131,6 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Fetch the mTLS client cert and create the grpc client
-
 	dexApiOptions := &dexapi.Options{
 		HostAndPort: fmt.Sprintf("%s.%s.%s%s", GRPC_SERVICE_NAME, dexv1Client.Namespace, "svc.cluster.local", ":5557"),
 		CABuffer:    bytes.NewBuffer(mTLSSecret.Data["ca.crt"]),
@@ -123,6 +153,19 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	defer dexApiClient.CloseConnection()
+
+	// If a deletionTimestamp exists this means the dex client is being deleted. Delete the oauth2client and remove the finalizer.
+	if dexv1Client.DeletionTimestamp != nil {
+		if _, err := r.DeleteOAuth2Client(dexApiClient, dexv1Client, ctx); err != nil {
+			return reconcile.Result{}, err
+		}
+		controllerutil.RemoveFinalizer(dexv1Client, DEXCLIENT_FINALIZER)
+		if err := r.Client.Update(context.TODO(), dexv1Client); err != nil {
+			log.Error(err, "failed to update DexClient after removing the finalizer")
+			return ctrl.Result{}, err
+		}
+		return reconcile.Result{}, nil
+	}
 
 	hasClientSecretBeenUpdated, err := r.hasClientSecretBeenUpdated(dexv1Client, ctx)
 
@@ -233,7 +276,7 @@ func (r *DexClientReconciler) CreateOAuth2Client(dexApiClient *dexapi.APIClient,
 func (r *DexClientReconciler) UpdateOAuth2Client(dexApiClient *dexapi.APIClient, dexv1Client *authv1alpha1.DexClient, ctx context.Context) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
 	// Update Client
-	log.Info("Client update", "client ID", dexv1Client.Name)
+	log.Info("Client update", "name", dexv1Client.Name)
 	err := dexApiClient.UpdateClient(
 		ctx,
 		dexv1Client.Spec.ClientID,
@@ -244,7 +287,7 @@ func (r *DexClientReconciler) UpdateOAuth2Client(dexApiClient *dexapi.APIClient,
 		dexv1Client.Spec.LogoURL,
 	)
 	if err != nil {
-		log.Error(err, "Client update failed", "client", dexv1Client.Name)
+		log.Error(err, "Client update failed", "name", dexv1Client.Name)
 		cond := metav1.Condition{
 			Type:    authv1alpha1.DexClientConditionTypeApplied,
 			Status:  metav1.ConditionFalse,
@@ -256,7 +299,7 @@ func (r *DexClientReconciler) UpdateOAuth2Client(dexApiClient *dexapi.APIClient,
 		}
 		return ctrl.Result{}, err
 	} else {
-		log.Info("Client updated", "client ID", dexv1Client.Name)
+		log.Info("Client updated", "name", dexv1Client.Name)
 		cond := metav1.Condition{
 			Type:    authv1alpha1.DexClientConditionTypeApplied,
 			Status:  metav1.ConditionTrue,
@@ -278,9 +321,9 @@ func (r *DexClientReconciler) DeleteOAuth2Client(dexApiClient *dexapi.APIClient,
 		ctx,
 		dexv1Client.Spec.ClientID,
 	)
-	if err != nil {
-		log.Error(err, "Client deletion failed", "client", dexv1Client.Name)
-		return ctrl.Result{}, err
+	if err != nil && !err.NotFound { // Ignore the error if the client wasn't found
+		log.Error(err.ApiError, "Client deletion failed", "client", dexv1Client.Name)
+		return ctrl.Result{}, err.ApiError
 	}
 	return ctrl.Result{}, nil
 }
@@ -377,6 +420,19 @@ func (r *DexClientReconciler) updateDexClientStatusConditions(dexClient *authv1a
 	return r.Client.Status().Update(ctx, dexClient)
 }
 
+func DexClientHasCondition(dexClient *authv1alpha1.DexClient, c metav1.Condition) bool {
+	if dexClient == nil {
+		return false
+	}
+	existingConditions := dexClient.Status.Conditions
+	for _, cond := range existingConditions {
+		if c.Type == cond.Type && c.Status == cond.Status {
+			return true
+		}
+	}
+	return false
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *DexClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
@@ -389,6 +445,7 @@ func (r *DexClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			dexClientNew := e.ObjectNew.(*authv1alpha1.DexClient)
 			// only handle the Finalizer and Spec changes
 			return !equality.Semantic.DeepEqual(e.ObjectOld.GetFinalizers(), e.ObjectNew.GetFinalizers()) ||
+				!equality.Semantic.DeepEqual(e.ObjectOld.GetDeletionTimestamp(), e.ObjectNew.GetDeletionTimestamp()) ||
 				!equality.Semantic.DeepEqual(dexClientOld.Spec, dexClientNew.Spec)
 
 		},

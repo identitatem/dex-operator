@@ -76,6 +76,10 @@ type CreateClientError struct {
 	ApiError      error
 	AlreadyExists bool
 }
+type DeleteClientError struct {
+	ApiError error
+	NotFound bool
+}
 
 // CreateClient a new OIDC client in Dex
 func (c *APIClient) CreateClient(ctx context.Context, redirectUris []string, trustedPeers []string,
@@ -126,17 +130,18 @@ func (c *APIClient) UpdateClient(ctx context.Context, clientID string, redirectU
 }
 
 // DeleteClient deletes the client with given Id from Dex
-func (c *APIClient) DeleteClient(ctx context.Context, id string) error {
+func (c *APIClient) DeleteClient(ctx context.Context, id string) *DeleteClientError {
 	req := &api.DeleteClientReq{
 		Id: id,
 	}
 	res, err := c.dex.DeleteClient(ctx, req)
 	if err != nil {
-		return errors.Wrapf(err, "failed to delete the client with id %q", id)
+		return &DeleteClientError{errors.Wrapf(err, "failed to delete the client with id %q", id), false}
 	}
 	if res.NotFound {
-		return fmt.Errorf("delete did not find the client with id %q", id)
+		return &DeleteClientError{fmt.Errorf("delete did not find the client with id %q", id), true}
 	}
+
 	return nil
 }
 
