@@ -814,7 +814,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 
 			if err != nil {
 				log.Error(err, "Error getting client secret")
-				return nil
+				return err
 			}
 
 			newConnector = DexConnectorSpec{
@@ -835,7 +835,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 
 			if err != nil {
 				log.Error(err, "Error getting client secret")
-				return nil
+				return err
 			}
 
 			newConnector = DexConnectorSpec{
@@ -855,7 +855,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 
 			if err != nil {
 				log.Error(err, "Error getting bind pw")
-				return nil
+				return err
 			}
 
 			// If there is a secret reference to the trusted Root CA
