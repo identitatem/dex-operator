@@ -76,7 +76,8 @@ spec:
         - mountPath: /etc/dex/tls
           name: tls
         - mountPath: /etc/dex/mtls
-          name: mtls
+          name: mtls                  
+{{ .AdditionalVolumeMounts | indent 8 }}
         livenessProbe:
           httpGet:
             path: /healthz
@@ -86,8 +87,7 @@ spec:
           httpGet:
             path: /healthz
             port: 5556
-            scheme: HTTPS                    
-{{ .AdditionalVolumeMounts | indent 8 }}
+            scheme: HTTPS  
       serviceAccountName: "{{ .ServiceAccountName }}"
       tolerations:
         - key: node-role.kubernetes.io/infra
