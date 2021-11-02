@@ -76,8 +76,8 @@ spec:
               cpu: 500m
               memory: 700Mi
             requests:
-              cpu: 500m
-              memory: 700Mi
+              cpu: 50m
+              memory: 150Mi
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
       tolerations:
