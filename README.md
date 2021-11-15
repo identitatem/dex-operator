@@ -183,15 +183,15 @@ oc apply -f hack/deployment.yaml
 
 ## Option 3: Local development
 
-Follow steps above to generate sample CRs and to create the bundle, which generates the Custom Resource Definitions. Once you've applied the CRDs, you can run the controller locally and use the sample CRs to trigger your reconcile loops.
-
 ```bash
 oc new-project dex-operator
-oc apply -f bundle/manifests/auth.identitatem.io_dexclients.yaml
-oc apply -f bundle/manifests/auth.identitatem.io_dexservers.yaml
 export RELATED_IMAGE_DEX=quay.io/dexidp/dex:v2.28.1
-go run main.go
+make run-local
 ```
+
+The `run-local` make target will generate and install the Custom Resource Definitions, then run the controller locally.
+
+Follow the "Setup for IDP connectors" steps above to generate and apply sample CRs to trigger your reconcile loops.
 
 If you are testing with DexClients, some extra steps are necessary.
 
