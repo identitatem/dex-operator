@@ -7,6 +7,10 @@ dex-image:
 	perl -pi -e "s#quay.io/dexidp/dex:v2.28.1#${DEX_IMAGE}#g" config/manager/manager.yaml
 
 
+.PHONY: run-local
+run-local: generate install
+	go run ./main.go
+
 .PHONY: bits
 bits: build dex-image manifests docker-build docker-push bundle bundle-build bundle-push
 
