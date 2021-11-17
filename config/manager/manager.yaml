@@ -55,7 +55,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: RELATED_IMAGE_DEX
-              value: quay.io/dexidp/dex:v2.28.1
+              value: ghcr.io/dexidp/dex:v2.30.2
           name: manager
           securityContext:
             allowPrivilegeEscalation: false

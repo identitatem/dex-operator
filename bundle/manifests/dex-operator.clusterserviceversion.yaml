@@ -349,7 +349,7 @@ spec:
                 - /manager
                 env:
                 - name: RELATED_IMAGE_DEX
-                  value: quay.io/dexidp/dex:v2.28.1
+                  value: ghcr.io/dexidp/dex:v2.30.2
                 image: quay.io/vnambiar/dex-operator:dex-cl-secret
                 imagePullPolicy: Always
                 livenessProbe:
