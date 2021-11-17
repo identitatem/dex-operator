@@ -267,7 +267,7 @@ func (r *DexServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 	if err := updateDexServerStatusConditions(r.Client, dexServer, cond); err != nil {
 		return ctrl.Result{}, err
-	}	
+	}
 
 	// Reconcile hourly to ensure grpc mtls certs are regenerated before expiry
 	return ctrl.Result{Requeue: true, RequeueAfter: 1 * time.Hour}, nil
@@ -301,7 +301,7 @@ func (r *DexServerReconciler) getDexServerDeploymentCondition(dexServer *authv1a
 			condition.Message += ", " + err.Error()
 			return condition, nil
 		}
-	
+
 		return condition, nil
 	}
 }

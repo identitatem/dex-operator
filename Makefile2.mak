@@ -1,10 +1,10 @@
-DEX_IMAGE ?= "quay.io/dexidp/dex:v2.28.1"
+DEX_IMAGE ?= "ghcr.io/dexidp/dex:v2.30.2"
 
 .PHONY: dex-image
 dex-image:
 	@echo ""
 	@echo "Using DEX_IMAGE: $(DEX_IMAGE)"
-	perl -pi -e "s#quay.io/dexidp/dex:v2.28.1#${DEX_IMAGE}#g" config/manager/manager.yaml
+	perl -pi -e "s#ghcr.io/dexidp/dex:v2.30.2#${DEX_IMAGE}#g" config/manager/manager.yaml
 
 
 .PHONY: run-local

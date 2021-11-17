@@ -185,7 +185,7 @@ oc apply -f hack/deployment.yaml
 
 ```bash
 oc new-project dex-operator
-export RELATED_IMAGE_DEX=quay.io/dexidp/dex:v2.28.1
+export RELATED_IMAGE_DEX=ghcr.io/dexidp/dex:v2.30.2
 make run-local
 ```
 
@@ -224,7 +224,7 @@ If you want to test using the VSCode debugger, you will need a .vscode/launch.js
             "mode": "debug",
             "program": "${workspaceFolder}/main.go",
             "env": {
-                "RELATED_IMAGE_DEX": "quay.io/dexidp/dex:v2.28.1"
+                "RELATED_IMAGE_DEX": "ghcr.io/dexidp/dex:v2.30.2"
             }
         }
 
