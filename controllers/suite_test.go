@@ -144,7 +144,7 @@ var _ = Describe("Setup Dex", func() {
 	})
 })
 
-var _ = Describe("DexServer CR with GitHub connector", func() {
+var _ = Describe("Process DexServer CR", func() {
 	DexServerName := "my-dexserver"
 	DexServerNamespace := "my-dexserver-ns"
 	AuthRealmName := "my-authrealm"
@@ -152,8 +152,18 @@ var _ = Describe("DexServer CR with GitHub connector", func() {
 	MyGithubAppClientID := "my-github-app-client-id"
 	MyGithubAppClientSecretName := AuthRealmName + "github"
 	DexServerIssuer := "https://testroutesubdomain.testhost.com"
-	var dexServer *authv1alpha1.DexServer
+	MyLDAPHost := "testldaphost:636"
+	MyLDAPBindDN := "fakebinddn"
+	MyLDAPBaseDN := "fakebasedn"
+	MyLDAPBindPW := "fakebindpw"
+	MyLDAPPWSecretName := AuthRealmName + "my-ldap-pw"
+	MyLDAPCertsSecretName := AuthRealmName + "my-ldap-certs"
 
+	var dexServer *authv1alpha1.DexServer
+	var configHashWithGitHub string
+	const SERVICE_ACCOUNT_NAME = "dex-operator-dexsso"
+
+	By("Creating a CR with a GitHub connector")
 	It("should create a DexServer", func() {
 		By("creating a test namespace for the DexServer", func() {
 			ns := &corev1.Namespace{
@@ -198,6 +208,7 @@ var _ = Describe("DexServer CR with GitHub connector", func() {
 					Connectors: []authv1alpha1.ConnectorSpec{
 						{
 							Name: "my-github",
+							Id:   "my-github",
 							Type: "github",
 							GitHub: authv1alpha1.GitHubConfigSpec{
 								ClientID: MyGithubAppClientID,
@@ -237,6 +248,12 @@ var _ = Describe("DexServer CR with GitHub connector", func() {
 		err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: DexServerName, Namespace: DexServerNamespace}, dexServer)
 		Expect(controllerutil.ContainsFinalizer(dexServer, "auth.identitatem.io/cleanup")).To(BeTrue())
 		Expect(err).Should(BeNil())
+	})
+	It("should create a service sccount", func() {
+		serviceAccount := &corev1.ServiceAccount{}
+		err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: SERVICE_ACCOUNT_NAME, Namespace: DexServerNamespace}, serviceAccount)
+		Expect(err).Should(BeNil())
+		Expect(serviceAccount.Labels["app"]).To(Equal(DexServerName))
 	})
 	It("should create http service for the dex server (with the default ingress certificate)", func() {
 		const SECRET_WEB_TLS_SUFFIX = "-tls-secret"
@@ -291,7 +308,6 @@ var _ = Describe("DexServer CR with GitHub connector", func() {
 	})
 	It("should create ClusterRoleBinding", func() {
 		crb := &rbacv1.ClusterRoleBinding{}
-		const SERVICE_ACCOUNT_NAME = "dex-operator-dexsso"
 		clusterRoleBindingName := SERVICE_ACCOUNT_NAME + "-" + DexServerNamespace
 		err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: clusterRoleBindingName}, crb)
 		Expect(err).Should(BeNil())
@@ -304,6 +320,18 @@ var _ = Describe("DexServer CR with GitHub connector", func() {
 		err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: DexServerName, Namespace: DexServerNamespace}, dexConfigMap)
 		Expect(err).Should(BeNil())
 		Expect(dexConfigMap.Data["config.yaml"]).ShouldNot(BeNil())
+		configMapYamlString := dexConfigMap.Data["config.yaml"]
+		// Parse yaml
+		var configMapData map[string]interface{}
+		err = yaml.Unmarshal([]byte(configMapYamlString), &configMapData)
+		Expect(err).Should(BeNil())
+		// Verify the ConfigMap for GitHub
+		Expect(configMapData["issuer"]).To(Equal(DexServerIssuer))
+		connectors := configMapData["connectors"].([]interface{})
+		connector := connectors[0].(map[string]interface{})
+		Expect(connector["Type"]).To(Equal("github"))
+		connectorConfig := connector["Config"].(map[string]interface{})
+		Expect(connectorConfig["ClientID"]).To(Equal(MyGithubAppClientID))
 	})
 	It("should create Dex server deployment", func() {
 		dsDeployment := &appsv1.Deployment{}
@@ -322,8 +350,8 @@ var _ = Describe("DexServer CR with GitHub connector", func() {
 			Expect(err).Should(BeNil())
 			h := sha256.New()
 			h.Write([]byte(jsonData))
-			dexConfigMapHash := fmt.Sprintf("%x", h.Sum(nil))
-			Expect(dsDeployment.Spec.Template.ObjectMeta.Annotations["auth.identitatem.io/configHash"]).To(Equal(dexConfigMapHash))
+			configHashWithGitHub = fmt.Sprintf("%x", h.Sum(nil))
+			Expect(dsDeployment.Spec.Template.ObjectMeta.Annotations["auth.identitatem.io/configHash"]).To(Equal(configHashWithGitHub))
 		})
 		By("setting the MTLS secret expiry timestamp in the deployment", func() {
 			// Check that the GRPC MTLS expiry is a valid time in the future
@@ -333,6 +361,132 @@ var _ = Describe("DexServer CR with GitHub connector", func() {
 			Expect(err).Should(BeNil())
 			currentTime := time.Now()
 			Expect(t.After(currentTime)).To(BeTrue())
+		})
+	})
+	It("should process an updated DexServer CR with LDAP", func() {
+		dexServer := &authv1alpha1.DexServer{}
+		By("retrieving the DexServer", func() {
+			err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: DexServerName, Namespace: DexServerNamespace}, dexServer)
+			Expect(err).Should(BeNil())
+		})
+		By("creating a secret containing the bind password secret for LDAP", func() {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      MyLDAPPWSecretName,
+					Namespace: AuthRealmNameSpace,
+				},
+				StringData: map[string]string{
+					"bindPW": MyLDAPBindPW,
+				},
+			}
+			err := k8sClient.Create(context.TODO(), secret)
+			Expect(err).To(BeNil())
+		})
+		By("creating a secret containing the root CA secret for LDAP", func() {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      MyLDAPCertsSecretName,
+					Namespace: AuthRealmNameSpace,
+				},
+				Data: map[string][]byte{
+					"tls.crt": []byte("tls.mycrt"),
+					"tls.key": []byte("tls.mykey"),
+					"ca.crt":  []byte("ca.crt"),
+				},
+			}
+			err := k8sClient.Create(context.TODO(), secret)
+			Expect(err).To(BeNil())
+		})
+		By("adding an LDAP connector to the DexServer", func() {
+			dexServerConnectors := []authv1alpha1.ConnectorSpec{
+				{
+					Name: "my-github",
+					Id:   "my-github",
+					Type: "github",
+					GitHub: authv1alpha1.GitHubConfigSpec{
+						ClientID: MyGithubAppClientID,
+						ClientSecretRef: corev1.SecretReference{
+							Name:      MyGithubAppClientSecretName,
+							Namespace: AuthRealmNameSpace,
+						},
+					},
+				},
+				{
+					Name: "my-ldap",
+					Id:   "my-ldap",
+					Type: "ldap",
+					LDAP: authv1alpha1.LDAPConfigSpec{
+						Host:          MyLDAPHost,
+						InsecureNoSSL: false,
+						BindDN:        MyLDAPBindDN,
+						RootCARef: corev1.SecretReference{
+							Name:      MyLDAPCertsSecretName,
+							Namespace: AuthRealmNameSpace,
+						},
+						BindPWRef: corev1.SecretReference{
+							Name:      MyLDAPPWSecretName,
+							Namespace: AuthRealmNameSpace,
+						},
+						UsernamePrompt: "Email Address",
+						UserSearch: authv1alpha1.UserSearchSpec{
+							BaseDN:    MyLDAPBaseDN,
+							Filter:    "(objectClass=person)",
+							Username:  "userPrincipalName",
+							IDAttr:    "DN",
+							EmailAttr: "userPrincipalName",
+							NameAttr:  "cn",
+						},
+					},
+				},
+			}
+			dexServer.Spec.Connectors = dexServerConnectors
+
+			ctx := context.Background()
+			err := k8sClient.Update(ctx, dexServer)
+			Expect(err).To(BeNil())
+
+			updatedDexServer := &authv1alpha1.DexServer{}
+
+			// Retry getting this newly updated dexserver
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: DexServerName, Namespace: DexServerNamespace}, updatedDexServer)
+				return err == nil && len(updatedDexServer.Spec.Connectors) == 2
+			}, 10, 1).Should(BeTrue())
+
+			By("running reconcile", func() {
+				Eventually(func() bool {
+					req := ctrl.Request{}
+					req.Name = DexServerName
+					req.Namespace = DexServerNamespace
+					_, err := r.Reconcile(context.TODO(), req)
+					return err == nil
+				}, 10, 1).Should(BeTrue())
+			})
+		})
+		By("Checking that the configMap is updated with the LDAP connector", func() {
+			dexConfigMap := &corev1.ConfigMap{}
+			err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: DexServerName, Namespace: DexServerNamespace}, dexConfigMap)
+			Expect(err).Should(BeNil())
+			Expect(dexConfigMap.Data["config.yaml"]).ShouldNot(BeNil())
+			configMapYamlString := dexConfigMap.Data["config.yaml"]
+			// Parse yaml
+			var configMapData map[string]interface{}
+			err = yaml.Unmarshal([]byte(configMapYamlString), &configMapData)
+			Expect(err).Should(BeNil())
+			// Verify the ConfigMap for LDAP
+			connectors := configMapData["connectors"].([]interface{})
+			Expect(len(connectors)).To(Equal(2)) // 2 connectors: Github, LDAP
+			connector := connectors[1].(map[string]interface{})
+			Expect(connector["Type"]).To(Equal("ldap"))
+			connectorConfig := connector["Config"].(map[string]interface{})
+			Expect(connectorConfig["BindDN"]).To(Equal(MyLDAPBindDN))
+			Expect(connectorConfig["rootCA"]).To(Equal("/etc/dex/ldapcerts/my-ldap/ca.crt"))
+		})
+		By("Checking that the configHash in the deployment is updated", func() {
+			dsDeployment := &appsv1.Deployment{}
+			err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: DexServerName, Namespace: DexServerNamespace}, dsDeployment)
+			Expect(err).Should(BeNil())
+			Expect(dsDeployment.Spec.Template.ObjectMeta.Annotations["auth.identitatem.io/configHash"]).ToNot(Equal(configHashWithGitHub))
 		})
 	})
 })
