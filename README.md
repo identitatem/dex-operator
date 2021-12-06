@@ -233,6 +233,11 @@ If you want to test using the VSCode debugger, you will need a .vscode/launch.js
 }
 ```
 
+# Run tests
+
+`make test`
+
+
 # References
 
 See Reference: https://hackmd.io/@0HKGaOf5Rg-SU-pJybkgKw/B1GhGowAO
