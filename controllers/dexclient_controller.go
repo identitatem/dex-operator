@@ -44,6 +44,8 @@ type DexClientReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+var DexapiNewClientPEM = dexapi.NewClientPEM
+
 //+kubebuilder:rbac:groups=auth.identitatem.io,resources=dexclients,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=auth.identitatem.io,resources=dexclients/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=auth.identitatem.io,resources=dexclients/finalizers,verbs=update
@@ -137,7 +139,7 @@ func (r *DexClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		CrtBuffer:   bytes.NewBuffer(mTLSSecret.Data["client.crt"]),
 		KeyBuffer:   bytes.NewBuffer(mTLSSecret.Data["client.key"]),
 	}
-	dexApiClient, err := dexapi.NewClientPEM(dexApiOptions)
+	dexApiClient, err := DexapiNewClientPEM(dexApiOptions)
 	if err != nil {
 		log.Error(err, "Failed to create api client connection to gRPC server", "client", dexv1Client.Name)
 		cond := metav1.Condition{

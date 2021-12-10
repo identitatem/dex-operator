@@ -29,8 +29,8 @@ type Options struct {
 
 // APIClient represent a client wrapper for Dex
 type APIClient struct {
-	dex api.DexClient
-	cc  *grpc.ClientConn
+	Dex api.DexClient
+	Cc  *grpc.ClientConn
 }
 
 func NewClientPEM(opts *Options) (*APIClient, error) {
@@ -57,15 +57,15 @@ func NewClientPEM(opts *Options) (*APIClient, error) {
 		return nil, errors.Wrapf(err, "opening the gRPC connection with server %q", opts.HostAndPort)
 	}
 	return &APIClient{
-		dex: api.NewDexClient(conn),
-		cc:  conn,
+		Dex: api.NewDexClient(conn),
+		Cc:  conn,
 	}, nil
 }
 
 // GetServerInfo returns server info
 func (c *APIClient) GetServerInfo(ctx context.Context) (string, error) {
 	req := &api.VersionReq{}
-	res, err := c.dex.GetVersion(ctx, req)
+	res, err := c.Dex.GetVersion(ctx, req)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to to get DEX version")
 	}
@@ -96,7 +96,7 @@ func (c *APIClient) CreateClient(ctx context.Context, redirectUris []string, tru
 		},
 	}
 
-	res, err := c.dex.CreateClient(ctx, req)
+	res, err := c.Dex.CreateClient(ctx, req)
 	if err != nil {
 		return nil, &CreateClientError{errors.Wrap(err, "failed to create the OIDC client"), false}
 	}
@@ -118,7 +118,7 @@ func (c *APIClient) UpdateClient(ctx context.Context, clientID string, redirectU
 		Name:         name,
 		LogoUrl:      logoURL,
 	}
-	res, err := c.dex.UpdateClient(ctx, req)
+	res, err := c.Dex.UpdateClient(ctx, req)
 	if err != nil {
 		return errors.Wrapf(err, "failed to update the client with id %q", clientID)
 	}
@@ -134,7 +134,7 @@ func (c *APIClient) DeleteClient(ctx context.Context, id string) *DeleteClientEr
 	req := &api.DeleteClientReq{
 		Id: id,
 	}
-	res, err := c.dex.DeleteClient(ctx, req)
+	res, err := c.Dex.DeleteClient(ctx, req)
 	if err != nil {
 		return &DeleteClientError{errors.Wrapf(err, "failed to delete the client with id %q", id), false}
 	}
@@ -147,7 +147,7 @@ func (c *APIClient) DeleteClient(ctx context.Context, id string) *DeleteClientEr
 
 // CloseConnection calls Close on the ClientConn
 func (c *APIClient) CloseConnection() error {
-	err := c.cc.Close()
+	err := c.Cc.Close()
 	if err != nil {
 		return errors.Wrapf(err, "error occurred closing the connection")
 	}
