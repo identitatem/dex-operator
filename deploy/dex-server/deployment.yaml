@@ -59,6 +59,7 @@ spec:
         env:
         - name: KUBERNETES_POD_NAMESPACE
           value: "{{ .DexServer.Namespace }}"
+{{ .AdditionalEnvVariables | indent 8 }}
         image: "{{ .DexImage }}"
         imagePullPolicy: Always
         name: "{{ .DexServer.Name }}"

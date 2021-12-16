@@ -5,8 +5,10 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ghodss/yaml"
@@ -228,6 +230,25 @@ var _ = Describe("Process DexServer CR", func() {
 		Expect(connector["Type"]).To(Equal("github"))
 		connectorConfig := connector["Config"].(map[string]interface{})
 		Expect(connectorConfig["ClientID"]).To(Equal(MyGithubAppClientID))
+	})
+	It("should provide client secret as an environment variable in the ConfigMap for dex", func() {
+		dexConfigMap := &corev1.ConfigMap{}
+		err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: DexServerName, Namespace: DexServerNamespace}, dexConfigMap)
+		Expect(err).Should(BeNil())
+		configMapYamlString := dexConfigMap.Data["config.yaml"]
+		// Parse yaml
+		var configMapData map[string]interface{}
+		err = yaml.Unmarshal([]byte(configMapYamlString), &configMapData)
+		Expect(err).Should(BeNil())
+		// Verify the ClientSecret field for GitHub
+		connectors := configMapData["connectors"].([]interface{})
+		connector := connectors[0].(map[string]interface{})
+		connectorConfig := connector["Config"].(map[string]interface{})
+		Expect(connector["Id"]).To(Equal("my-github"))
+		connId := fmt.Sprintf("%v", connector["Id"])
+		idBytes := []byte(string(connId))
+		alphanumericId := hex.EncodeToString(idBytes)
+		Expect(connectorConfig["ClientSecret"]).To(Equal("$GITHUB_CLIENT_SECRET_" + strings.ToUpper(alphanumericId)))
 	})
 	It("should create Dex server deployment", func() {
 		dsDeployment := &appsv1.Deployment{}

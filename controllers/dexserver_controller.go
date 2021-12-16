@@ -5,10 +5,12 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ghodss/yaml"
@@ -53,7 +55,30 @@ const (
 	MTLS_CERT_EXPIRY_ANNOTATION = "auth.identitatem.io/expiry"
 	IDP_CREDENTIAL_LABEL        = "auth.identitatem.io/idp-credential"
 	DEXSERVER_FINALIZER         = "auth.identitatem.io/cleanup"
+	GITHUB_CLIENT_SECRET_ENV    = "GITHUB_CLIENT_SECRET"
+	MICROSOFT_CLIENT_SECRET_ENV = "MICROSOFT_CLIENT_SECRET"
+	LDAP_BIND_PW_ENV            = "LDAP_BIND_PW"
 )
+
+type ConnectorSecret struct {
+	EnvVarName string
+	SecretKey  string
+}
+
+var envVariableForConnector = map[authv1alpha1.ConnectorType]ConnectorSecret{
+	"github": {
+		EnvVarName: "GITHUB_CLIENT_SECRET",
+		SecretKey:  "clientSecret",
+	},
+	"ldap": {
+		EnvVarName: "LDAP_BIND_PW",
+		SecretKey:  "bindPW",
+	},
+	"microsoft": {
+		EnvVarName: "MICROSOFT_CLIENT_SECRET",
+		SecretKey:  "clientSecret",
+	},
+}
 
 // DexServerReconciler reconciles a DexServer object
 type DexServerReconciler struct {
@@ -553,50 +578,87 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	var additionalVolumeMounts []corev1.VolumeMount
 	var additionalVolumes []corev1.Volume
 	var additionalVolumeMountsYaml, additionalVolumesYaml []byte
+	var additionalEnvVariables []corev1.EnvVar
+	var additionalEnvVariablesYaml []byte
 	var rootCAHash string
 
 	// Update Volume Mounts based on rootCA secret refs for LDAP connectors (Trusted Root CA and optionally client cert and key files)
 	// Iterate over connectors defined in the DexServer to create the dex configuration for connectors
 	for _, connector := range dexServer.Spec.Connectors {
-		if connector.Type == authv1alpha1.ConnectorTypeLDAP && connector.LDAP.RootCARef.Name != "" {
+		switch connector.Type {
+		case authv1alpha1.ConnectorTypeGitHub:
 			// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
-			secretName := connector.LDAP.RootCARef.Namespace + "-" + connector.LDAP.RootCARef.Name
-			rootCASecret := &corev1.Secret{}
-
-			// Add the root CA secret's sha256 checksum to the Deployment to trigger rolling restarts when the secret changes
-			if err := r.Client.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: dexServer.Namespace}, rootCASecret); err != nil {
-				// If the secret is not yet found, the annotation will be omitted, and will be added once the secret is created
-				if !kubeerrors.IsNotFound(err) {
-					log.Error(err, "error getting secret containing LDAP root CA")
-					return err
-				}
-			} else {
-				jsonData, err := json.Marshal(rootCASecret)
-				if err != nil {
-					log.Error(err, "failed to marshal LDAP root CA JSON")
-					return err
-				}
-				h := sha256.New()
-				h.Write([]byte(jsonData))
-				rootCAHash = rootCAHash + fmt.Sprintf("%x", h.Sum(nil)) // If there are multiple LDAP connectors with root CA, the hashes will be concatenated
-
-				newVolume := corev1.Volume{
-					Name: "ldapcerts-" + connector.Id,
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName: secretName,
-						},
-					},
-				}
-
-				newVolumeMount := corev1.VolumeMount{
-					Name:      "ldapcerts-" + connector.Id,
-					MountPath: "/etc/dex/ldapcerts/" + connector.Id,
-				}
-
-				additionalVolumeMounts = append(additionalVolumeMounts, newVolumeMount)
-				additionalVolumes = append(additionalVolumes, newVolume)
+			secretName := connector.GitHub.ClientSecretRef.Namespace + "-" + connector.GitHub.ClientSecretRef.Name
+			newEnvVariable, err := r.getEnvironmentVariableForSecret(ctx, dexServer, secretName, connector)
+			if err != nil {
+				return err
 			}
+			if newEnvVariable != (corev1.EnvVar{}) {
+				additionalEnvVariables = append(additionalEnvVariables, newEnvVariable)
+			}
+		case authv1alpha1.ConnectorTypeMicrosoft:
+			// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
+			secretName := connector.Microsoft.ClientSecretRef.Namespace + "-" + connector.Microsoft.ClientSecretRef.Name
+			newEnvVariable, err := r.getEnvironmentVariableForSecret(ctx, dexServer, secretName, connector)
+			if err != nil {
+				return err
+			}
+			if newEnvVariable != (corev1.EnvVar{}) {
+				additionalEnvVariables = append(additionalEnvVariables, newEnvVariable)
+			}
+		case authv1alpha1.ConnectorTypeLDAP:
+			// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
+			secretName := connector.LDAP.BindPWRef.Namespace + "-" + connector.LDAP.BindPWRef.Name
+			newEnvVariable, err := r.getEnvironmentVariableForSecret(ctx, dexServer, secretName, connector)
+			if err != nil {
+				return err
+			}
+			if newEnvVariable != (corev1.EnvVar{}) {
+				additionalEnvVariables = append(additionalEnvVariables, newEnvVariable)
+			}
+
+			if connector.LDAP.RootCARef.Name != "" {
+				// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
+				secretName := connector.LDAP.RootCARef.Namespace + "-" + connector.LDAP.RootCARef.Name
+				rootCASecret := &corev1.Secret{}
+
+				// Add the root CA secret's sha256 checksum to the Deployment to trigger rolling restarts when the secret changes
+				if err := r.Client.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: dexServer.Namespace}, rootCASecret); err != nil {
+					// If the secret is not yet found, the annotation will be omitted, and will be added once the secret is created
+					if !kubeerrors.IsNotFound(err) {
+						log.Error(err, "error getting secret containing LDAP root CA")
+						return err
+					}
+				} else {
+					jsonData, err := json.Marshal(rootCASecret)
+					if err != nil {
+						log.Error(err, "failed to marshal LDAP root CA JSON")
+						return err
+					}
+					h := sha256.New()
+					h.Write([]byte(jsonData))
+					rootCAHash = rootCAHash + fmt.Sprintf("%x", h.Sum(nil)) // If there are multiple LDAP connectors with root CA, the hashes will be concatenated
+
+					newVolume := corev1.Volume{
+						Name: "ldapcerts-" + connector.Id,
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: secretName,
+							},
+						},
+					}
+
+					newVolumeMount := corev1.VolumeMount{
+						Name:      "ldapcerts-" + connector.Id,
+						MountPath: "/etc/dex/ldapcerts/" + connector.Id,
+					}
+
+					additionalVolumeMounts = append(additionalVolumeMounts, newVolumeMount)
+					additionalVolumes = append(additionalVolumes, newVolume)
+				}
+			}
+		default:
+			return nil
 		}
 	}
 	if len(additionalVolumeMounts) > 0 {
@@ -608,6 +670,14 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 		additionalVolumesYaml, err = yaml.Marshal(&additionalVolumes)
 		if err != nil {
 			log.Error(err, "failed to marshal yaml for additional volumes")
+		}
+	}
+
+	if len(additionalEnvVariables) > 0 {
+		// Get yaml representation of additional environment variables
+		additionalEnvVariablesYaml, err = yaml.Marshal(&additionalEnvVariables)
+		if err != nil {
+			log.Error(err, "failed to marshal yaml for additional environment variables")
 		}
 	}
 
@@ -650,6 +720,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 		MtlsSecretName         string
 		MtlsSecretExpiry       string
 		DexServer              *authv1alpha1.DexServer
+		AdditionalEnvVariables string
 		AdditionalVolumeMounts string
 		AdditionalVolumes      string
 	}{
@@ -665,6 +736,7 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 		MtlsSecretName:         SECRET_MTLS_NAME,
 		MtlsSecretExpiry:       mtlsSecretExpiry,
 		DexServer:              dexServer,
+		AdditionalEnvVariables: string(additionalEnvVariablesYaml),
 		AdditionalVolumeMounts: string(additionalVolumeMountsYaml),
 		AdditionalVolumes:      string(additionalVolumesYaml),
 	}
@@ -680,6 +752,50 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	}
 
 	return nil
+}
+
+// Set unique alphanumeric Id for connector (this is used as a suffix for the environment variable holding the private credentials for the connector)
+func getUniqueAlphanumericIdForConnector(connector authv1alpha1.ConnectorSpec) string {
+	idBytes := []byte(connector.Id)
+	str := hex.EncodeToString(idBytes)
+	return strings.ToUpper(str)
+}
+
+// Get environment variable referencing a particular secret
+func (r *DexServerReconciler) getEnvironmentVariableForSecret(ctx context.Context, dexServer *authv1alpha1.DexServer, secretName string, connector authv1alpha1.ConnectorSpec) (envVariable corev1.EnvVar, err error) {
+	log := ctrllog.FromContext(ctx)
+	credentialSecret := &corev1.Secret{}
+	var newEnvVariable corev1.EnvVar
+	// get an alphanumeric ID for the connector that can be used as a suffix in the env variable name containing the secret for this connector
+	connectorAlphanumericId := getUniqueAlphanumericIdForConnector(connector)
+
+	// The environment variable name includes a unique alphanumeric suffix so to distinguish between secrets for multiple connectors of the same type
+	envVariableName := envVariableForConnector[connector.Type].EnvVarName + "_" + connectorAlphanumericId
+
+	secretKey := envVariableForConnector[connector.Type].SecretKey
+
+	if err := r.Client.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: dexServer.Namespace}, credentialSecret); err != nil {
+		// The environment variable will be added once the secret is created
+		if !kubeerrors.IsNotFound(err) {
+			log.Error(err, "error getting secret containing GitHub client secret")
+			return newEnvVariable, err
+		}
+		return newEnvVariable, nil
+	} else {
+		// Add an environment variable to reference this secret
+		newEnvVariable := corev1.EnvVar{
+			Name: envVariableName,
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: secretName,
+					},
+					Key: secretKey,
+				},
+			},
+		}
+		return newEnvVariable, nil
+	}
 }
 
 // Copy a secret from its original namespace into the Dex Server namespace
@@ -850,16 +966,24 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 	// Iterate over connectors defined in the DexServer to create the dex configuration for connectors
 
 	for _, connector := range dexServer.Spec.Connectors {
+		// get an alphanumeric ID for the connector that can be used as a suffix in the env variable name containing the secret for this connector
+		connectorAlphanumericId := getUniqueAlphanumericIdForConnector(connector)
+
 		var newConnector DexConnectorSpec
 		switch connector.Type {
 		case authv1alpha1.ConnectorTypeGitHub:
-			// Get Github ClientSecret from SecretRef
-			clientSecret, err := getConnectorSecretFromRef(connector, dexServer, r, ctx)
-
-			if err != nil {
-				log.Error(err, "Error getting client secret")
-				return err
+			// Check if secret is in the dex server namespace and copy it into the dexserver ns
+			// The secret copied into the dexserver ns will be referenced by the env variable in the dexserver deployment
+			if secretNamespace := connector.GitHub.ClientSecretRef.Namespace; secretNamespace != dexServer.Namespace {
+				err := r.copySecretToDexServerNamespace(dexServer, connector.GitHub.ClientSecretRef, ctx)
+				if err != nil {
+					return err
+				}
 			}
+
+			// Environment variable that references the GitHub client secret copied into the dexserver ns
+			// The name includes the connector's alphanumeric unique Id as a suffix to distinguish between client secrets for multiple GitHub connectors
+			clientSecretEnvVariable := "$" + envVariableForConnector[connector.Type].EnvVarName + "_" + connectorAlphanumericId
 
 			newConnector = DexConnectorSpec{
 				Type: string(authv1alpha1.ConnectorTypeGitHub),
@@ -867,20 +991,25 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 				Name: connector.Name,
 				Config: DexConnectorConfigSpec{
 					ClientID:     connector.GitHub.ClientID,
-					ClientSecret: clientSecret,
+					ClientSecret: clientSecretEnvVariable,
 					RedirectURI:  connector.GitHub.RedirectURI,
 					Org:          connector.GitHub.Org,
 					Orgs:         connector.GitHub.Orgs,
 				},
 			}
 		case authv1alpha1.ConnectorTypeMicrosoft:
-			// Get Microsoft ClientSecret from SecretRef
-			clientSecret, err := getConnectorSecretFromRef(connector, dexServer, r, ctx)
-
-			if err != nil {
-				log.Error(err, "Error getting client secret")
-				return err
+			// Check if secret is in the dex server namespace and copy it into the dexserver ns
+			// The secret copied into the dexserver ns will be referenced by the env variable in the dexserver deployment
+			if secretNamespace := connector.Microsoft.ClientSecretRef.Namespace; secretNamespace != dexServer.Namespace {
+				err := r.copySecretToDexServerNamespace(dexServer, connector.Microsoft.ClientSecretRef, ctx)
+				if err != nil {
+					return err
+				}
 			}
+
+			// Environment variable that references the Microsoft OAuth client secret copied into the dexserver ns
+			// The name includes the connector's alphanumeric unique Id as a suffix to distinguish between client secrets for multiple Microsoft connectors
+			clientSecretEnvVariable := "$" + envVariableForConnector[connector.Type].EnvVarName + "_" + connectorAlphanumericId
 
 			newConnector = DexConnectorSpec{
 				Type: string(authv1alpha1.ConnectorTypeMicrosoft),
@@ -888,19 +1017,24 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 				Name: connector.Name,
 				Config: DexConnectorConfigSpec{
 					ClientID:     connector.Microsoft.ClientID,
-					ClientSecret: clientSecret,
+					ClientSecret: clientSecretEnvVariable,
 					RedirectURI:  connector.Microsoft.RedirectURI,
 					Tenant:       connector.Microsoft.Tenant,
 				},
 			}
 		case authv1alpha1.ConnectorTypeLDAP:
-			// Get LDAP BindPW from SecretRef
-			bindPW, err := getConnectorSecretFromRef(connector, dexServer, r, ctx)
-
-			if err != nil {
-				log.Error(err, "Error getting bind pw")
-				return err
+			// Check if bind password secret is in the dex server namespace and copy it into the dexserver ns
+			// The secret copied into the dexserver ns will be referenced by the env variable in the dexserver deployment
+			if secretNamespace := connector.LDAP.BindPWRef.Namespace; secretNamespace != dexServer.Namespace {
+				err := r.copySecretToDexServerNamespace(dexServer, connector.LDAP.BindPWRef, ctx)
+				if err != nil {
+					return err
+				}
 			}
+
+			// Environment variable that references the LDAP Bind Password secret copied into the dexserver ns
+			// The name includes the connector's alphanumeric unique Id as a suffix to distinguish between bind passwords for multiple connectors
+			bindPWEnvVariable := "$" + envVariableForConnector[connector.Type].EnvVarName + "_" + connectorAlphanumericId
 
 			// If there is a secret reference to the trusted Root CA
 			var rootCAPath, clientCAPath, clientKeyPath string
@@ -947,7 +1081,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 					ClientCA:           clientCAPath,
 					ClientKey:          clientKeyPath,
 					BindDN:             connector.LDAP.BindDN,
-					BindPW:             bindPW,
+					BindPW:             bindPWEnvVariable,
 					UsernamePrompt:     connector.LDAP.UsernamePrompt,
 				},
 			}
