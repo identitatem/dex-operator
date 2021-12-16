@@ -18,6 +18,9 @@ spec:
       {{ if .RootCAHash}}
         auth.identitatem.io/rootCAHash: "{{ .RootCAHash }}"
       {{ end }}
+      {{ if .ConnectorCredentialsHash}}
+        auth.identitatem.io/connectorCredentialsHash: "{{ .ConnectorCredentialsHash }}"
+      {{ end }}
       {{ if .DexConfigMapHash}}
         auth.identitatem.io/configHash: "{{ .DexConfigMapHash }}"
       {{ end }}
