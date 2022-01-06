@@ -776,7 +776,7 @@ func (r *DexServerReconciler) getEnvironmentVariableForSecret(ctx context.Contex
 	if err := r.Client.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: dexServer.Namespace}, credentialSecret); err != nil {
 		// The environment variable will be added once the secret is created
 		if !kubeerrors.IsNotFound(err) {
-			log.Error(err, "error getting secret containing GitHub client secret")
+			log.Error(err, fmt.Sprintf("error getting secret containing credential for %s", connector.Type))
 			return newEnvVariable, err
 		}
 		return newEnvVariable, nil
