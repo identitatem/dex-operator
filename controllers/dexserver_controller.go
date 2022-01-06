@@ -585,11 +585,6 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 		var secretName string
 		switch connector.Type {
 		case authv1alpha1.ConnectorTypeGitHub:
-			if err != nil {
-				log.Error(err, "Error getting client secret")
-				return err
-			}			
-
 			// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
 			secretName = connector.GitHub.ClientSecretRef.Namespace + "-" + connector.GitHub.ClientSecretRef.Name
 		case authv1alpha1.ConnectorTypeMicrosoft:
@@ -714,24 +709,24 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 	}
 
 	values := struct {
-		DexImage               string
-		DexConfigMapHash       string
-		RootCAHash             string
-		ConnectorCredentialsHash	string
-		ServiceAccountName     string
-		TlsSecretName          string
-		MtlsSecretName         string
-		MtlsSecretExpiry       string
-		DexServer              *authv1alpha1.DexServer
-		AdditionalEnvVariables string
-		AdditionalVolumeMounts string
-		AdditionalVolumes      string
+		DexImage                 string
+		DexConfigMapHash         string
+		RootCAHash               string
+		ConnectorCredentialsHash string
+		ServiceAccountName       string
+		TlsSecretName            string
+		MtlsSecretName           string
+		MtlsSecretExpiry         string
+		DexServer                *authv1alpha1.DexServer
+		AdditionalEnvVariables   string
+		AdditionalVolumeMounts   string
+		AdditionalVolumes        string
 	}{
-		DexImage:           dexImage,
-		DexConfigMapHash:   dexConfigMapHash,
-		RootCAHash:         rootCAHash,
+		DexImage:                 dexImage,
+		DexConfigMapHash:         dexConfigMapHash,
+		RootCAHash:               rootCAHash,
 		ConnectorCredentialsHash: connectorCredsHash,
-		ServiceAccountName: SERVICE_ACCOUNT_NAME,
+		ServiceAccountName:       SERVICE_ACCOUNT_NAME,
 		// this secret is generated using service serving certificate via service annotation
 		// service.beta.openshift.io/serving-cert-secret-name: dexServer.Name-tls-secret
 		TlsSecretName: fmt.Sprintf(dexServer.Name + SECRET_WEB_TLS_SUFFIX),
