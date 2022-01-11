@@ -14,7 +14,7 @@ This is a operator-sdk based operator to deploy and manage a Dex server instance
 - You will need operator-sdk 1.9.0+
 - OpenShift cluster
 - Github OAuth Application, for now, we will use github as id provider
-- To narrow the scope, you will want the OCP cluster where you run dex to be using signed certificates, as opposed to the default self-signed certificates. If we use self-signed certificates, of course, we have to distribute the CA to each cluster that try to access the dex service. Of cource, this should be supported in the final cut. You can follow the steps defined here to enable LetsEncrypt certificates: https://github.com/open-cluster-management/sre-tools/wiki/ACM---Day-1#add-an-acme-certificate
+- To narrow the scope, you will want the OCP cluster where you run dex to be using signed certificates, as opposed to the default self-signed certificates. If we use self-signed certificates, of course, we have to distribute the CA to each cluster that try to access the dex service. Of cource, this should be supported in the final cut. You can follow the steps defined here to enable LetsEncrypt certificates: https://github.com/stolostron/sre-tools/wiki/ACM---Day-1#add-an-acme-certificate
 
 ### Steps
 
