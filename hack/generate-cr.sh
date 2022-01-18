@@ -36,6 +36,9 @@ export DEXSERVER_LDAP_AD_ROOTCA_SECRET_NAME=${DEXSERVER_LDAP_AD_ROOTCA_SECRET_NA
 export DEXSERVER_LDAP_AD_BIND_DN=${DEXSERVER_LDAP_AD_BIND_DN:-"cn=fakecn,dc=fakedomain,dc=com"}
 export DEXSERVER_LDAP_AD_USERSEARCH_BASEDN=${DEXSERVER_LDAP_AD_USERSEARCH_BASEDN:-"ou=fakeou,dc=fakedomain,dc=com"}
 
+export DEXSERVER_OPENID_CLIENT_ID=${DEXSERVER_OPENID_CLIENT_ID:-"dexserverclientid"}
+export DEXSERVER_OPENID_CLIENT_SECRET=${DEXSERVER_OPENID_CLIENT_SECRET:-"dexservermssecret123456"}
+
 # Secret containing root ca (ca.crt), and client cert and key (tls.crt, tls.key) to test LDAP on Azure AD with self-signed certificates
 oc create secret generic ${DEXSERVER_LDAP_AD_ROOTCA_SECRET_NAME} \
 --from-file=ca.crt=ldap-certs/ca.crt \
@@ -146,7 +149,17 @@ spec:
         username: userPrincipalName
         idAttr: DN
         emailAttr: userPrincipalName
-        nameAttr: cn          
+        nameAttr: cn
+  - type: oidc
+    id: oidc
+    name: oidc
+    oidc: 
+      clientID: "${DEXSERVER_OPENID_CLIENT_ID}"
+      clientSecretRef:
+        name: ${DEXSERVER_OPENID_CLIENT_SECRET}
+        namespace: ${NS}
+      redirectURI: "https://${NAME}-${NS}.${APPS}/callback"
+
 EOF
 
 # DEX CLIENT

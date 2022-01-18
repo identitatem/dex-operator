@@ -136,8 +136,8 @@ type LDAPConfigSpec struct {
 	GroupSearch GroupSearchSpec `json:"groupSearch,omitempty"`
 }
 
-// OpenIDConfigSpec describes the configuration specific to the OpenID connector
-type OpenIDConfigSpec struct {
+// OIDCConfigSpec describes the configuration specific to the OpenID connector
+type OIDCConfigSpec struct {
 	ClientID        string                 `json:"clientID,omitempty"`
 	ClientSecretRef corev1.SecretReference `json:"clientSecretRef,omitempty"`
 	Issuer          string                 `json:"issuer,omitempty"`
@@ -147,14 +147,14 @@ type OpenIDConfigSpec struct {
 // ConnectorSpec defines the OIDC connector config details
 type ConnectorSpec struct {
 	Name string `json:"name,omitempty"`
-	// +kubebuilder:validation:Enum=github;ldap;microsoft
+	// +kubebuilder:validation:Enum=github;ldap;microsoft;oidc
 	Type ConnectorType `json:"type,omitempty"`
 	// Unique Id for the connector
 	Id        string              `json:"id,omitempty"`
 	GitHub    GitHubConfigSpec    `json:"github,omitempty"`
 	LDAP      LDAPConfigSpec      `json:"ldap,omitempty"`
 	Microsoft MicrosoftConfigSpec `json:"microsoft,omitempty"`
-	OpenID    OpenIDConfigSpec    `json:"openid,omitempty"`
+	OIDC      OIDCConfigSpec      `json:"oidc,omitempty"`
 }
 
 type ConnectorType string
@@ -170,7 +170,7 @@ const (
 	ConnectorTypeMicrosoft ConnectorType = "microsoft"
 
 	//ConnectorTypeOpenID enables Dex to use OpenID OAuth2 floww to identify the end user
-	ConnectorTypeOpenID ConnectorType = "openid"
+	ConnectorTypeOIDC ConnectorType = "oidc"
 )
 
 // DexServerSpec defines the desired state of DexServer

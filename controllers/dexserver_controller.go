@@ -403,6 +403,17 @@ func getConnectorSecretFromRef(connector authv1alpha1.ConnectorSpec, m *authv1al
 		}
 		checkAndAddLabelToSecret(resource, r, ctx)
 		return string(resource.Data["bindPW"]), nil
+	case authv1alpha1.ConnectorTypeOIDC:
+		secretName = connector.OIDC.ClientSecretRef.Name
+		if secretNamespace = connector.OIDC.ClientSecretRef.Namespace; secretNamespace == "" {
+			secretNamespace = m.Namespace
+		}
+		resource := &corev1.Secret{}
+		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && kubeerrors.IsNotFound(err) {
+			return "", err
+		}
+		checkAndAddLabelToSecret(resource, r, ctx)
+		return string(resource.Data["clientSecret"]), nil
 	default:
 		return "", fmt.Errorf("could not retrieve secret")
 	}
@@ -912,7 +923,7 @@ func (r *DexServerReconciler) syncServiceGrpc(dexServer *authv1alpha1.DexServer,
 }
 
 type DexConnectorConfigSpec struct {
-	// Common fields between GitHub and Microsoft OAuth2 configuration
+	// Common fields between GitHub,  Microsoft, OpenID OAuth2 configuration
 	ClientID     string `yaml:"clientID,omitempty"`
 	ClientSecret string `yaml:"clientSecret,omitempty"`
 	RedirectURI  string `yaml:"redirectURI,omitempty"`
@@ -944,6 +955,8 @@ type DexConnectorConfigSpec struct {
 	UserSearch         authv1alpha1.UserSearchSpec  `yaml:"userSearch,omitempty"`
 	GroupSearch        authv1alpha1.GroupSearchSpec `yaml:"groupSearch,omitempty"`
 
+	//OpenID configuration
+	Issuer string `yaml:"issuer,omitempty"`
 	// Common field between GitHub and LDAP configs
 	RootCA string `json:"rootCA,omitempty"`
 }
@@ -1113,7 +1126,26 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 					NameAttr:     connector.LDAP.GroupSearch.NameAttr,
 				}
 			}
+		case authv1alpha1.ConnectorTypeOIDC:
+			// Get Github ClientSecret from SecretRef
+			clientSecret, err := getConnectorSecretFromRef(connector, dexServer, r, ctx)
 
+			if err != nil {
+				log.Error(err, "Error getting client secret")
+				return err
+			}
+
+			newConnector = DexConnectorSpec{
+				Type: string(authv1alpha1.ConnectorTypeOIDC),
+				Id:   connector.Id,
+				Name: connector.Name,
+				Config: DexConnectorConfigSpec{
+					ClientID:     connector.OIDC.ClientID,
+					ClientSecret: clientSecret,
+					RedirectURI:  connector.OIDC.RedirectURI,
+					Issuer:       connector.OIDC.Issuer,
+				},
+			}
 		default:
 			return nil
 		}

@@ -277,11 +277,36 @@ spec:
                       type: object
                     name:
                       type: string
+                    oidc:
+                      description: OIDCConfigSpec describes the configuration specific
+                        to the OpenID connector
+                      properties:
+                        clientID:
+                          type: string
+                        clientSecretRef:
+                          description: SecretReference represents a Secret Reference.
+                            It has enough information to retrieve secret in any namespace
+                          properties:
+                            name:
+                              description: Name is unique within a namespace to reference
+                                a secret resource.
+                              type: string
+                            namespace:
+                              description: Namespace defines the space within which
+                                the secret name must be unique.
+                              type: string
+                          type: object
+                        issuer:
+                          type: string
+                        redirectURI:
+                          type: string
+                      type: object
                     type:
                       enum:
                       - github
                       - ldap
                       - microsoft
+                      - oidc
                       type: string
                   type: object
                 type: array
