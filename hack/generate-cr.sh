@@ -154,6 +154,7 @@ spec:
     id: oidc
     name: oidc
     oidc: 
+      issuer: "https://${NAME}-${NS}.${APPS}"
       clientID: "${DEXSERVER_OPENID_CLIENT_ID}"
       clientSecretRef:
         name: ${DEXSERVER_OPENID_CLIENT_SECRET}

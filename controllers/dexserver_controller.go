@@ -956,7 +956,9 @@ type DexConnectorConfigSpec struct {
 	GroupSearch        authv1alpha1.GroupSearchSpec `yaml:"groupSearch,omitempty"`
 
 	//OpenID configuration
-	Issuer string `yaml:"issuer,omitempty"`
+	Issuer       string                        `yaml:"issuer,omitempty"`
+	ClaimMapping authv1alpha1.ClaimMappingSpec `yaml:"claimMapping,omitempty"`
+
 	// Common field between GitHub and LDAP configs
 	RootCA string `json:"rootCA,omitempty"`
 }
@@ -1144,6 +1146,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 					ClientSecret: clientSecret,
 					RedirectURI:  connector.OIDC.RedirectURI,
 					Issuer:       connector.OIDC.Issuer,
+					ClaimMapping: connector.OIDC.ClaimMapping,
 				},
 			}
 		default:
