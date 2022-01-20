@@ -283,6 +283,32 @@ spec:
                       description: OIDCConfigSpec describes the configuration specific
                         to the OpenID connector
                       properties:
+                        claimMapping:
+                          description: ClaimMappingSpec claims mappings
+                          properties:
+                            email:
+                              description: email is the list of claims whose values
+                                should be used as the email address. Optional. If
+                                unspecified, no email is set for the identity
+                              items:
+                                type: string
+                              type: array
+                            name:
+                              description: name is the list of claims whose values
+                                should be used as the display name. Optional. If unspecified,
+                                no display name is set for the identity
+                              items:
+                                type: string
+                              type: array
+                            preferredUsername:
+                              description: preferredUsername is the list of claims
+                                whose values should be used as the preferred username.
+                                If unspecified, the preferred username is determined
+                                from the value of the sub claim
+                              items:
+                                type: string
+                              type: array
+                          type: object
                         clientID:
                           type: string
                         clientSecretRef:

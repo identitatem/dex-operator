@@ -136,12 +136,31 @@ type LDAPConfigSpec struct {
 	GroupSearch GroupSearchSpec `json:"groupSearch,omitempty"`
 }
 
+// ClaimMappingSpec claims mappings
+type ClaimMappingSpec struct {
+	// preferredUsername is the list of claims whose values should be used as the preferred username.
+	// If unspecified, the preferred username is determined from the value of the sub claim
+	// +optional
+	PreferredUsername []string `json:"preferredUsername,omitempty"`
+
+	// name is the list of claims whose values should be used as the display name. Optional.
+	// If unspecified, no display name is set for the identity
+	// +optional
+	Name []string `json:"name,omitempty"`
+
+	// email is the list of claims whose values should be used as the email address. Optional.
+	// If unspecified, no email is set for the identity
+	// +optional
+	Email []string `json:"email,omitempty"`
+}
+
 // OIDCConfigSpec describes the configuration specific to the OpenID connector
 type OIDCConfigSpec struct {
 	ClientID        string                 `json:"clientID,omitempty"`
 	ClientSecretRef corev1.SecretReference `json:"clientSecretRef,omitempty"`
 	Issuer          string                 `json:"issuer,omitempty"`
 	RedirectURI     string                 `json:"redirectURI,omitempty"`
+	ClaimMapping    ClaimMappingSpec       `json:"claimMapping,omitempty"`
 }
 
 // ConnectorSpec defines the OIDC connector config details
