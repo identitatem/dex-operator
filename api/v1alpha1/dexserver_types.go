@@ -188,7 +188,7 @@ const (
 	// ConnectorTypeMicrosoft enables Dex to use the Microsoft OAuth2 flow to identify the end user through their Microsoft account
 	ConnectorTypeMicrosoft ConnectorType = "microsoft"
 
-	//ConnectorTypeOpenID enables Dex to use OpenID OAuth2 floww to identify the end user
+	//ConnectorTypeOIDC enables Dex to use OpenID OAuth2 floww to identify the end user
 	ConnectorTypeOIDC ConnectorType = "oidc"
 )
 
