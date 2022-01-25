@@ -1,7 +1,6 @@
 # Copyright Red Hat
 
 # Build the manager binary
-#FROM golang:1.16 as builder
 FROM registry.ci.openshift.org/stolostron/builder:go1.17-linux AS builder
 
 
