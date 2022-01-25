@@ -18,6 +18,9 @@ spec:
       {{ if .RootCAHash}}
         auth.identitatem.io/rootCAHash: "{{ .RootCAHash }}"
       {{ end }}
+      {{ if .ConnectorCredentialsHash}}
+        auth.identitatem.io/connectorCredentialsHash: "{{ .ConnectorCredentialsHash }}"
+      {{ end }}
       {{ if .DexConfigMapHash}}
         auth.identitatem.io/configHash: "{{ .DexConfigMapHash }}"
       {{ end }}
@@ -59,6 +62,7 @@ spec:
         env:
         - name: KUBERNETES_POD_NAMESPACE
           value: "{{ .DexServer.Namespace }}"
+{{ .AdditionalEnvVariables | indent 8 }}
         image: "{{ .DexImage }}"
         imagePullPolicy: Always
         name: "{{ .DexServer.Name }}"
