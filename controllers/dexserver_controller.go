@@ -75,6 +75,10 @@ var envVariableForConnector = map[authv1alpha1.ConnectorType]ConnectorSecret{
 		EnvVarName: "MICROSOFT_CLIENT_SECRET",
 		SecretKey:  "clientSecret",
 	},
+	"oidc": {
+		EnvVarName: "OIDC_CLIENT_SECRET",
+		SecretKey:  "clientSecret",
+	},
 }
 
 // DexServerReconciler reconciles a DexServer object
@@ -645,6 +649,9 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 					additionalVolumes = append(additionalVolumes, newVolume)
 				}
 			}
+		case authv1alpha1.ConnectorTypeOIDC:
+			// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
+			secretName = connector.OIDC.ClientSecretRef.Namespace + "-" + connector.OIDC.ClientSecretRef.Name
 		default:
 			return nil
 		}
@@ -1129,13 +1136,18 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 				}
 			}
 		case authv1alpha1.ConnectorTypeOIDC:
-			// Get Github ClientSecret from SecretRef
-			clientSecret, err := getConnectorSecretFromRef(connector, dexServer, r, ctx)
-
-			if err != nil {
-				log.Error(err, "Error getting client secret")
-				return err
+			// Check if secret is in the dex server namespace and copy it into the dexserver ns
+			// The secret copied into the dexserver ns will be referenced by the env variable in the dexserver deployment
+			if secretNamespace := connector.OIDC.ClientSecretRef.Namespace; secretNamespace != dexServer.Namespace {
+				err := r.copySecretToDexServerNamespace(dexServer, connector.OIDC.ClientSecretRef, ctx)
+				if err != nil {
+					return err
+				}
 			}
+
+			// Environment variable that references the GitHub client secret copied into the dexserver ns
+			// The name includes the connector's alphanumeric unique Id as a suffix to distinguish between client secrets for multiple GitHub connectors
+			clientSecretEnvVariable := "$" + envVariableForConnector[connector.Type].EnvVarName + "_" + connectorAlphanumericId
 
 			newConnector = DexConnectorSpec{
 				Type: string(authv1alpha1.ConnectorTypeOIDC),
@@ -1143,7 +1155,7 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 				Name: connector.Name,
 				Config: DexConnectorConfigSpec{
 					ClientID:     connector.OIDC.ClientID,
-					ClientSecret: clientSecret,
+					ClientSecret: clientSecretEnvVariable,
 					RedirectURI:  connector.OIDC.RedirectURI,
 					Issuer:       connector.OIDC.Issuer,
 					ClaimMapping: connector.OIDC.ClaimMapping,
