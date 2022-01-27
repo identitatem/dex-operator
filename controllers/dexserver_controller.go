@@ -993,13 +993,10 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 		var newConnector DexConnectorSpec
 		switch connector.Type {
 		case authv1alpha1.ConnectorTypeGitHub:
-			// Check if secret is in the dex server namespace and copy it into the dexserver ns
 			// The secret copied into the dexserver ns will be referenced by the env variable in the dexserver deployment
-			if secretNamespace := connector.GitHub.ClientSecretRef.Namespace; secretNamespace != dexServer.Namespace {
-				err := r.copySecretToDexServerNamespace(dexServer, connector.GitHub.ClientSecretRef, ctx)
-				if err != nil {
-					return err
-				}
+			err := r.copySecretToDexServerNamespace(dexServer, connector.GitHub.ClientSecretRef, ctx)
+			if err != nil {
+				return err
 			}
 
 			// Environment variable that references the GitHub client secret copied into the dexserver ns
@@ -1019,13 +1016,10 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 				},
 			}
 		case authv1alpha1.ConnectorTypeMicrosoft:
-			// Check if secret is in the dex server namespace and copy it into the dexserver ns
 			// The secret copied into the dexserver ns will be referenced by the env variable in the dexserver deployment
-			if secretNamespace := connector.Microsoft.ClientSecretRef.Namespace; secretNamespace != dexServer.Namespace {
-				err := r.copySecretToDexServerNamespace(dexServer, connector.Microsoft.ClientSecretRef, ctx)
-				if err != nil {
-					return err
-				}
+			err := r.copySecretToDexServerNamespace(dexServer, connector.Microsoft.ClientSecretRef, ctx)
+			if err != nil {
+				return err
 			}
 
 			// Environment variable that references the Microsoft OAuth client secret copied into the dexserver ns
@@ -1044,13 +1038,10 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 				},
 			}
 		case authv1alpha1.ConnectorTypeLDAP:
-			// Check if bind password secret is in the dex server namespace and copy it into the dexserver ns
 			// The secret copied into the dexserver ns will be referenced by the env variable in the dexserver deployment
-			if secretNamespace := connector.LDAP.BindPWRef.Namespace; secretNamespace != dexServer.Namespace {
-				err := r.copySecretToDexServerNamespace(dexServer, connector.LDAP.BindPWRef, ctx)
-				if err != nil {
-					return err
-				}
+			err := r.copySecretToDexServerNamespace(dexServer, connector.LDAP.BindPWRef, ctx)
+			if err != nil {
+				return err
 			}
 
 			// Environment variable that references the LDAP Bind Password secret copied into the dexserver ns
@@ -1060,12 +1051,9 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 			// If there is a secret reference to the trusted Root CA
 			var rootCAPath, clientCAPath, clientKeyPath string
 			if connector.LDAP.RootCARef.Name != "" {
-				// Check if secret is in the dex server namespace
-				if secretNamespace := connector.LDAP.RootCARef.Namespace; secretNamespace != dexServer.Namespace {
-					err := r.copySecretToDexServerNamespace(dexServer, connector.LDAP.RootCARef, ctx)
-					if err != nil {
-						return err
-					}
+				err := r.copySecretToDexServerNamespace(dexServer, connector.LDAP.RootCARef, ctx)
+				if err != nil {
+					return err
 				}
 				// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
 				secretName := connector.LDAP.RootCARef.Namespace + "-" + connector.LDAP.RootCARef.Name
