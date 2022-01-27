@@ -13,7 +13,7 @@ import (
 
 	"github.com/ghodss/yaml"
 	dexoperatorconfig "github.com/identitatem/dex-operator/config"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
@@ -63,7 +63,6 @@ var _ = Describe("Process DexServer CR", func() {
 	var configHashWithGitHub string
 	const SERVICE_ACCOUNT_NAME = "dex-operator-dexsso"
 
-	By("Creating a CR with a GitHub connector")
 	It("should create a DexServer", func() {
 		By("creating a test namespace for the DexServer", func() {
 			ns := &corev1.Namespace{
