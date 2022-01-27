@@ -9,7 +9,7 @@ import (
 	api "github.com/dexidp/dex/api/v2"
 	authv1alpha1 "github.com/identitatem/dex-operator/api/v1alpha1"
 	dexapi "github.com/identitatem/dex-operator/controllers/dex"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc"
 	corev1 "k8s.io/api/core/v1"
