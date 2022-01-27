@@ -136,16 +136,44 @@ type LDAPConfigSpec struct {
 	GroupSearch GroupSearchSpec `json:"groupSearch,omitempty"`
 }
 
+// ClaimMappingSpec claims mappings
+type ClaimMappingSpec struct {
+	// preferredUsername is the list of claims whose values should be used as the preferred username.
+	// If unspecified, the preferred username is determined from the value of the sub claim
+	// +optional
+	PreferredUsername []string `json:"preferredUsername,omitempty"`
+
+	// name is the list of claims whose values should be used as the display name. Optional.
+	// If unspecified, no display name is set for the identity
+	// +optional
+	Name []string `json:"name,omitempty"`
+
+	// email is the list of claims whose values should be used as the email address. Optional.
+	// If unspecified, no email is set for the identity
+	// +optional
+	Email []string `json:"email,omitempty"`
+}
+
+// OIDCConfigSpec describes the configuration specific to the OpenID connector
+type OIDCConfigSpec struct {
+	ClientID        string                 `json:"clientID,omitempty"`
+	ClientSecretRef corev1.SecretReference `json:"clientSecretRef,omitempty"`
+	Issuer          string                 `json:"issuer,omitempty"`
+	RedirectURI     string                 `json:"redirectURI,omitempty"`
+	ClaimMapping    ClaimMappingSpec       `json:"claimMapping,omitempty"`
+}
+
 // ConnectorSpec defines the OIDC connector config details
 type ConnectorSpec struct {
 	Name string `json:"name,omitempty"`
-	// +kubebuilder:validation:Enum=github;ldap;microsoft
+	// +kubebuilder:validation:Enum=github;ldap;microsoft;oidc
 	Type ConnectorType `json:"type,omitempty"`
 	// Unique Id for the connector
 	Id        string              `json:"id,omitempty"`
 	GitHub    GitHubConfigSpec    `json:"github,omitempty"`
 	LDAP      LDAPConfigSpec      `json:"ldap,omitempty"`
 	Microsoft MicrosoftConfigSpec `json:"microsoft,omitempty"`
+	OIDC      OIDCConfigSpec      `json:"oidc,omitempty"`
 }
 
 type ConnectorType string
@@ -159,6 +187,9 @@ const (
 
 	// ConnectorTypeMicrosoft enables Dex to use the Microsoft OAuth2 flow to identify the end user through their Microsoft account
 	ConnectorTypeMicrosoft ConnectorType = "microsoft"
+
+	//ConnectorTypeOIDC enables Dex to use OpenID OAuth2 floww to identify the end user
+	ConnectorTypeOIDC ConnectorType = "oidc"
 )
 
 // DexServerSpec defines the desired state of DexServer

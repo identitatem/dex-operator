@@ -56,6 +56,8 @@ var _ = Describe("Process DexServer CR", func() {
 	MyLDAPBindPW := "fakebindpw"
 	MyLDAPPWSecretName := AuthRealmName + "my-ldap-pw"
 	MyLDAPCertsSecretName := AuthRealmName + "my-ldap-certs"
+	MyOpenIDClientSecretName := AuthRealmName + "oidc"
+	MyOpenIDClientID := "my-oidc-client-id"
 
 	var dexServer *authv1alpha1.DexServer
 	var configHashWithGitHub string
@@ -398,6 +400,134 @@ var _ = Describe("Process DexServer CR", func() {
 			connectorConfig := connector["Config"].(map[string]interface{})
 			Expect(connectorConfig["BindDN"]).To(Equal(MyLDAPBindDN))
 			Expect(connectorConfig["rootCA"]).To(Equal("/etc/dex/ldapcerts/my-ldap/ca.crt"))
+		})
+		By("Checking that the configHash in the deployment is updated", func() {
+			dsDeployment := &appsv1.Deployment{}
+			err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: DexServerName, Namespace: DexServerNamespace}, dsDeployment)
+			Expect(err).Should(BeNil())
+			Expect(dsDeployment.Spec.Template.ObjectMeta.Annotations["auth.identitatem.io/configHash"]).ToNot(Equal(configHashWithGitHub))
+		})
+	})
+
+	// test for OpenID
+
+	It("should process an updated DexServer CR with OpenID Connect", func() {
+		dexServer := &authv1alpha1.DexServer{}
+		By("retrieving the DexServer", func() {
+			err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: DexServerName, Namespace: DexServerNamespace}, dexServer)
+			Expect(err).Should(BeNil())
+		})
+		By("creating a secret containing OpenID client secret", func() {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      MyOpenIDClientSecretName,
+					Namespace: AuthRealmNameSpace,
+				},
+				StringData: map[string]string{
+					"clientSecret": "BogusSecret",
+				},
+			}
+			err := k8sClient.Create(context.TODO(), secret)
+			Expect(err).To(BeNil())
+		})
+
+		By("adding an OpenID connector to the DexServer", func() {
+			dexServerConnectors := []authv1alpha1.ConnectorSpec{
+				{
+					Name: "my-github",
+					Id:   "my-github",
+					Type: "github",
+					GitHub: authv1alpha1.GitHubConfigSpec{
+						ClientID: MyGithubAppClientID,
+						ClientSecretRef: corev1.SecretReference{
+							Name:      MyGithubAppClientSecretName,
+							Namespace: AuthRealmNameSpace,
+						},
+					},
+				},
+				{
+					Name: "my-ldap",
+					Id:   "my-ldap",
+					Type: "ldap",
+					LDAP: authv1alpha1.LDAPConfigSpec{
+						Host:          MyLDAPHost,
+						InsecureNoSSL: false,
+						BindDN:        MyLDAPBindDN,
+						RootCARef: corev1.SecretReference{
+							Name:      MyLDAPCertsSecretName,
+							Namespace: AuthRealmNameSpace,
+						},
+						BindPWRef: corev1.SecretReference{
+							Name:      MyLDAPPWSecretName,
+							Namespace: AuthRealmNameSpace,
+						},
+						UsernamePrompt: "Email Address",
+						UserSearch: authv1alpha1.UserSearchSpec{
+							BaseDN:    MyLDAPBaseDN,
+							Filter:    "(objectClass=person)",
+							Username:  "userPrincipalName",
+							IDAttr:    "DN",
+							EmailAttr: "userPrincipalName",
+							NameAttr:  "cn",
+						},
+					},
+				},
+				{
+					Name: "my-oidc",
+					Id:   "my-oidc",
+					Type: "oidc",
+					OIDC: authv1alpha1.OIDCConfigSpec{
+						Issuer:   DexServerIssuer,
+						ClientID: MyOpenIDClientID,
+						ClientSecretRef: corev1.SecretReference{
+							Name:      MyOpenIDClientSecretName,
+							Namespace: AuthRealmNameSpace,
+						},
+					},
+				},
+			}
+			dexServer.Spec.Connectors = dexServerConnectors
+
+			ctx := context.Background()
+			err := k8sClient.Update(ctx, dexServer)
+			Expect(err).To(BeNil())
+
+			updatedDexServer := &authv1alpha1.DexServer{}
+			err = k8sClient.Get(context.TODO(), client.ObjectKey{Name: DexServerName, Namespace: DexServerNamespace}, updatedDexServer)
+
+			// Retry getting this newly updated dexserver
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: DexServerName, Namespace: DexServerNamespace}, updatedDexServer)
+				return err == nil && len(updatedDexServer.Spec.Connectors) == 3
+			}, 10, 1).Should(BeTrue())
+
+			By("running reconcile", func() {
+				Eventually(func() bool {
+					req := ctrl.Request{}
+					req.Name = DexServerName
+					req.Namespace = DexServerNamespace
+					_, err := rDexServer.Reconcile(context.TODO(), req)
+					return err == nil
+				}, 10, 1).Should(BeTrue())
+			})
+		})
+		By("Checking that the configMap is updated with the OpenID connector", func() {
+			dexConfigMap := &corev1.ConfigMap{}
+			err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: DexServerName, Namespace: DexServerNamespace}, dexConfigMap)
+			Expect(err).Should(BeNil())
+			Expect(dexConfigMap.Data["config.yaml"]).ShouldNot(BeNil())
+			configMapYamlString := dexConfigMap.Data["config.yaml"]
+			// Parse yaml
+			var configMapData map[string]interface{}
+			err = yaml.Unmarshal([]byte(configMapYamlString), &configMapData)
+			Expect(err).Should(BeNil())
+			// Verify the ConfigMap for LDAP
+			connectors := configMapData["connectors"].([]interface{})
+			Expect(len(connectors)).To(Equal(3)) // 2 connectors: Github, LDAP, OIDC
+			connector := connectors[2].(map[string]interface{})
+			Expect(connector["Type"]).To(Equal("oidc"))
+			connectorConfig := connector["Config"].(map[string]interface{})
+			Expect(connectorConfig["ClientID"]).To(Equal(MyOpenIDClientID))
 		})
 		By("Checking that the configHash in the deployment is updated", func() {
 			dsDeployment := &appsv1.Deployment{}

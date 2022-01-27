@@ -75,6 +75,10 @@ var envVariableForConnector = map[authv1alpha1.ConnectorType]ConnectorSecret{
 		EnvVarName: "MICROSOFT_CLIENT_SECRET",
 		SecretKey:  "clientSecret",
 	},
+	"oidc": {
+		EnvVarName: "OIDC_CLIENT_SECRET",
+		SecretKey:  "clientSecret",
+	},
 }
 
 // DexServerReconciler reconciles a DexServer object
@@ -403,6 +407,17 @@ func getConnectorSecretFromRef(connector authv1alpha1.ConnectorSpec, m *authv1al
 		}
 		checkAndAddLabelToSecret(resource, r, ctx)
 		return string(resource.Data["bindPW"]), nil
+	case authv1alpha1.ConnectorTypeOIDC:
+		secretName = connector.OIDC.ClientSecretRef.Name
+		if secretNamespace = connector.OIDC.ClientSecretRef.Namespace; secretNamespace == "" {
+			secretNamespace = m.Namespace
+		}
+		resource := &corev1.Secret{}
+		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil && kubeerrors.IsNotFound(err) {
+			return "", err
+		}
+		checkAndAddLabelToSecret(resource, r, ctx)
+		return string(resource.Data["clientSecret"]), nil
 	default:
 		return "", fmt.Errorf("could not retrieve secret")
 	}
@@ -634,6 +649,9 @@ func (r *DexServerReconciler) syncDeployment(dexServer *authv1alpha1.DexServer, 
 					additionalVolumes = append(additionalVolumes, newVolume)
 				}
 			}
+		case authv1alpha1.ConnectorTypeOIDC:
+			// To ensure uniqueness of names for secrets copied into the dex server namespace, the secret name is prefixed with the original namespace
+			secretName = connector.OIDC.ClientSecretRef.Namespace + "-" + connector.OIDC.ClientSecretRef.Name
 		default:
 			return nil
 		}
@@ -912,7 +930,7 @@ func (r *DexServerReconciler) syncServiceGrpc(dexServer *authv1alpha1.DexServer,
 }
 
 type DexConnectorConfigSpec struct {
-	// Common fields between GitHub and Microsoft OAuth2 configuration
+	// Common fields between GitHub,  Microsoft, OpenID OAuth2 configuration
 	ClientID     string `yaml:"clientID,omitempty"`
 	ClientSecret string `yaml:"clientSecret,omitempty"`
 	RedirectURI  string `yaml:"redirectURI,omitempty"`
@@ -943,6 +961,10 @@ type DexConnectorConfigSpec struct {
 	UsernamePrompt     string                       `yaml:"usernamePrompt,omitempty"`
 	UserSearch         authv1alpha1.UserSearchSpec  `yaml:"userSearch,omitempty"`
 	GroupSearch        authv1alpha1.GroupSearchSpec `yaml:"groupSearch,omitempty"`
+
+	//OpenID configuration
+	Issuer       string                        `yaml:"issuer,omitempty"`
+	ClaimMapping authv1alpha1.ClaimMappingSpec `yaml:"claimMapping,omitempty"`
 
 	// Common field between GitHub and LDAP configs
 	RootCA string `json:"rootCA,omitempty"`
@@ -1113,7 +1135,32 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 					NameAttr:     connector.LDAP.GroupSearch.NameAttr,
 				}
 			}
+		case authv1alpha1.ConnectorTypeOIDC:
+			// Check if secret is in the dex server namespace and copy it into the dexserver ns
+			// The secret copied into the dexserver ns will be referenced by the env variable in the dexserver deployment
+			if secretNamespace := connector.OIDC.ClientSecretRef.Namespace; secretNamespace != dexServer.Namespace {
+				err := r.copySecretToDexServerNamespace(dexServer, connector.OIDC.ClientSecretRef, ctx)
+				if err != nil {
+					return err
+				}
+			}
 
+			// Environment variable that references the GitHub client secret copied into the dexserver ns
+			// The name includes the connector's alphanumeric unique Id as a suffix to distinguish between client secrets for multiple GitHub connectors
+			clientSecretEnvVariable := "$" + envVariableForConnector[connector.Type].EnvVarName + "_" + connectorAlphanumericId
+
+			newConnector = DexConnectorSpec{
+				Type: string(authv1alpha1.ConnectorTypeOIDC),
+				Id:   connector.Id,
+				Name: connector.Name,
+				Config: DexConnectorConfigSpec{
+					ClientID:     connector.OIDC.ClientID,
+					ClientSecret: clientSecretEnvVariable,
+					RedirectURI:  connector.OIDC.RedirectURI,
+					Issuer:       connector.OIDC.Issuer,
+					ClaimMapping: connector.OIDC.ClaimMapping,
+				},
+			}
 		default:
 			return nil
 		}
