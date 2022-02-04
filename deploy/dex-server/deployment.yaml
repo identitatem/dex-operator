@@ -5,6 +5,8 @@ kind: Deployment
 metadata:
   name: "{{ .DexServer.Name }}"
   namespace: "{{ .DexServer.Namespace }}"
+  labels:
+    control-plane: dex-server
 spec:
   replicas: 1
   selector:
