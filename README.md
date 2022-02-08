@@ -237,6 +237,32 @@ If you want to test using the VSCode debugger, you will need a .vscode/launch.js
 
 `make test`
 
+# Tagging and Generating a Release
+
+We have a GitHub action defined to generate a tagged bundle and catalog image when a SemVer GitHub tag is created on this repo.  To create a new release that will generate a versioned Bundle/Catalog there are two methods:
+
+**NOTE: The Major.Minor SemVer is watched by the mid/downstream processes.  If you must change the version from 0.2.*, you MUST notify CICD so they can change the tag_filter they use to watch for changes!!!**
+
+
+## Use GitHub UI
+
+1. Run the following command to generate the value we will use as part of the release and tag for non-shipped releases
+```bash
+date -u "+0.2.1-%Y%m%d-%H-%M-%S"
+```
+  If you are building a release candidate, the format should be **0.2.1-rc#**.  (Where **#** is the release candidate number. Do not use UPPERCASE characters!)  If you are building the final release, the format should be **0.2.1**.
+
+1. Go to dex-operator github page and select **Releases** (https://github.com/identitatem/dex-operator/releases)
+1. Select **Draft a new release**
+1. For **Release title**, enter **v** and then paste the value from the date command above
+1. Select **Choose a tag**
+1. In the **Find or create a new tag field**, paste the value from the date command above
+1. Select **Create new tab on publish**
+1. Select **Publish release**.
+   This will cause a github action to start.  Once the github action is complete, the new dex-operator quay image from https://quay.io/repository/identitatem/dex-operator?tab=tags.  Once the dex-operator quay image is available, move on to
+   the next part which will pull the new dex-operator quay image
+   into the idp-mgmt-operator.
+
 
 # References
 
