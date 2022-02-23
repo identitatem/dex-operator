@@ -115,6 +115,7 @@ var _ = Describe("Process DexServer CR", func() {
 									Name:      MyGithubAppClientSecretName,
 									Namespace: AuthRealmNameSpace,
 								},
+								LoadAllGroups: true,
 							},
 						},
 					},
@@ -231,6 +232,7 @@ var _ = Describe("Process DexServer CR", func() {
 		Expect(connector["Type"]).To(Equal("github"))
 		connectorConfig := connector["Config"].(map[string]interface{})
 		Expect(connectorConfig["ClientID"]).To(Equal(MyGithubAppClientID))
+		Expect(connectorConfig["LoadAllGroups"]).To(Equal(true))
 	})
 	It("should provide client secret as an environment variable in the ConfigMap for dex", func() {
 		dexConfigMap := &corev1.ConfigMap{}
