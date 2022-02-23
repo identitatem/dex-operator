@@ -1008,11 +1008,12 @@ func (r *DexServerReconciler) syncConfigMap(dexServer *authv1alpha1.DexServer, c
 				Id:   connector.Id,
 				Name: connector.Name,
 				Config: DexConnectorConfigSpec{
-					ClientID:     connector.GitHub.ClientID,
-					ClientSecret: clientSecretEnvVariable,
-					RedirectURI:  connector.GitHub.RedirectURI,
-					Org:          connector.GitHub.Org,
-					Orgs:         connector.GitHub.Orgs,
+					ClientID:      connector.GitHub.ClientID,
+					ClientSecret:  clientSecretEnvVariable,
+					RedirectURI:   connector.GitHub.RedirectURI,
+					Org:           connector.GitHub.Org,
+					Orgs:          connector.GitHub.Orgs,
+					LoadAllGroups: connector.GitHub.LoadAllGroups,
 				},
 			}
 		case authv1alpha1.ConnectorTypeMicrosoft:
