@@ -140,16 +140,19 @@ type LDAPConfigSpec struct {
 type ClaimMappingSpec struct {
 	// preferredUsername is the list of claims whose values should be used as the preferred username.
 	// If unspecified, the preferred username is determined from the value of the sub claim
+	// If there is list of preferred username, we are supporting only first entry from list.
 	// +optional
 	PreferredUsername string `json:"preferredUsername,omitempty"`
 
 	// name is the list of claims whose values should be used as the display name. Optional.
 	// If unspecified, no display name is set for the identity
+	// If there is list of name, we are supporting only first entry from list.
 	// +optional
 	Name string `json:"name,omitempty"`
 
 	// email is the list of claims whose values should be used as the email address. Optional.
 	// If unspecified, no email is set for the identity
+	// If there is list of email, we are supporting only first entry from list.
 	// +optional
 	Email string `json:"email,omitempty"`
 }
