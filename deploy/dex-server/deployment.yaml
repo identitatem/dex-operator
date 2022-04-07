@@ -35,6 +35,8 @@ spec:
         dexconfig_namespace: "{{ .DexServer.Namespace }}"
         idp-antiaffinity-selector: "{{ .DexServer.Name }}"
     spec:
+      securityContext:
+        runAsNonRoot: true
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
