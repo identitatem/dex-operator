@@ -96,7 +96,7 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.18.1 // indirect
 	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83 // indirect
-	golang.org/x/net v0.0.0-20210825183410-e898025ed96a // indirect
+	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d // indirect
 	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d // indirect
@@ -126,6 +126,7 @@ require (
 replace (
 	github.com/go-logr/logr => github.com/go-logr/logr v0.4.0
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20220124143425-d74727069f6f
+	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
 	k8s.io/api => k8s.io/api v0.22.1
 	k8s.io/apimachinery => k8s.io/apimachinery v0.22.1
 	k8s.io/klog/v2 => k8s.io/klog/v2 v2.9.0
