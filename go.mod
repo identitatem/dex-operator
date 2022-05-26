@@ -126,6 +126,7 @@ require (
 replace (
 	github.com/go-logr/logr => github.com/go-logr/logr v0.4.0
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20220124143425-d74727069f6f
+	github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.11.1
 	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
 	k8s.io/api => k8s.io/api v0.22.1
 	k8s.io/apimachinery => k8s.io/apimachinery v0.22.1
