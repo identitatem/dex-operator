@@ -108,7 +108,7 @@ check-copyright:
 		@build/check-copyright.sh
 
 test: manifests generate fmt vet check-copyright envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile coverage.out
 
 ##@ Build
 
