@@ -200,8 +200,8 @@ func (r *DexClientReconciler) CreateOAuth2Client(dexApiClient *dexapi.APIClient,
 		"LogoURL", dexv1Client.Spec.LogoURL,
 		"clientSecretRef", dexv1Client.Spec.ClientSecretRef.Name)
 
-	// read clientSecret from secret
-	dexclientclientSecret, err := r.getClientClientSecretFromRef(dexv1Client, ctx)
+	// read client secret and add label if missing
+	dexclientclientSecret, err := r.getAndLabelClientSecret(dexv1Client, ctx)
 
 	if err != nil {
 		log.Error(err, "Client create failed on client secret", "client", dexv1Client.Name)
@@ -217,6 +217,11 @@ func (r *DexClientReconciler) CreateOAuth2Client(dexApiClient *dexapi.APIClient,
 		return ctrl.Result{}, err
 	}
 
+	dexclientclientsecretdata, ok := dexclientclientSecret.Data["clientSecret"]
+	if !ok {
+		return ctrl.Result{}, fmt.Errorf("dex client client secret %s/%s doesn't contain the data clientSecret", dexv1Client.Name, dexv1Client.Namespace)
+	}
+
 	// Implement dex auth client creation here
 	res, createClientError := dexApiClient.CreateClient(
 		ctx,
@@ -226,7 +231,7 @@ func (r *DexClientReconciler) CreateOAuth2Client(dexApiClient *dexapi.APIClient,
 		dexv1Client.Name,
 		dexv1Client.Spec.ClientID,
 		dexv1Client.Spec.LogoURL,
-		dexclientclientSecret,
+		string(dexclientclientsecretdata),
 	)
 	if createClientError != nil {
 		if createClientError.AlreadyExists {
@@ -332,8 +337,7 @@ func (r *DexClientReconciler) DeleteOAuth2Client(dexApiClient *dexapi.APIClient,
 
 // Check if the secret already contains the required label "auth.identitatem.io/dex-client-secret"
 // and if it doesn't then add the label - this label allows us to watch specific secrets for updates
-func checkAndAddLabelToClientSecret(secret *corev1.Secret, r *DexClientReconciler, ctx context.Context) {
-	log := ctrllog.FromContext(ctx)
+func checkAndAddLabelToClientSecret(secret *corev1.Secret, r *DexClientReconciler, ctx context.Context) error {
 
 	if secret.Labels == nil {
 		secret.Labels = make(map[string]string)
@@ -341,20 +345,20 @@ func checkAndAddLabelToClientSecret(secret *corev1.Secret, r *DexClientReconcile
 	if _, ok := secret.Labels[DEX_CLIENT_SECRET_LABEL]; !ok {
 		secret.Labels[DEX_CLIENT_SECRET_LABEL] = ""
 		if err := r.Update(ctx, secret); err != nil {
-			log.Error(err, "Error updating dex client secret with label")
+			return err
 		}
 	}
+	return nil
 }
 
 // Get the sha256 checksum for the Dex Client secret
 func (r *DexClientReconciler) getHashForASecret(dexv1Client *authv1alpha1.DexClient, ctx context.Context) (string, error) {
 	log := ctrllog.FromContext(ctx)
-	secretName := dexv1Client.Spec.ClientSecretRef.Name
-	secretNamespace := dexv1Client.Spec.ClientSecretRef.Namespace
 
-	// Get client secret from ref
-	dexclientclientSecret := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, dexclientclientSecret); err != nil {
+	// read client secret and add label if missing
+	dexclientclientSecret, err := r.getAndLabelClientSecret(dexv1Client, ctx)
+
+	if err != nil {
 		if !kubeerrors.IsNotFound(err) {
 			return "", err
 		}
@@ -504,7 +508,7 @@ func (r *DexClientReconciler) getMTLSSecret(m *authv1alpha1.DexClient, ctx conte
 	return resource, nil
 }
 
-func (r *DexClientReconciler) getClientClientSecretFromRef(m *authv1alpha1.DexClient, ctx context.Context) (string, error) {
+func (r *DexClientReconciler) getAndLabelClientSecret(m *authv1alpha1.DexClient, ctx context.Context) (*corev1.Secret, error) {
 	log := ctrllog.FromContext(ctx)
 	secretName := m.Spec.ClientSecretRef.Name
 	secretNamespace := m.Spec.ClientSecretRef.Namespace
@@ -512,16 +516,17 @@ func (r *DexClientReconciler) getClientClientSecretFromRef(m *authv1alpha1.DexCl
 
 	resource := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, resource); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Add the label "auth.identitatem.io/dex-client-secret" to the Dex Client so that we can watch for any updates to it
-	checkAndAddLabelToClientSecret(resource, r, ctx)
-
-	log.Info("retrieve clientSecret in ", "secretName", secretName, "secretNamespace", "secretNamespace")
-	if secret, ok := resource.Data["clientSecret"]; ok {
-		log.Info("found clientSecret in ", "secretName", secretName, "secretNamespace", "secretNamespace")
-		return string(secret), nil
+	err := checkAndAddLabelToClientSecret(resource, r, ctx)
+	if err != nil {
+		log.Error(err, "Error updating dex client secret with label")
+		return nil, err
 	}
-	return "", fmt.Errorf("secret %s/%s doesn't contain the data clientSecret", secretNamespace, secretName)
+
+	log.Info("retrieved clientSecret in ", "secretName", secretName, "secretNamespace", secretNamespace)
+
+	return resource, nil
 }
